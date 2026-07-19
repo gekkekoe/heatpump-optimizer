@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ODIN — Intelligent Heat Pump Optimizer for Asgard</title>
+<style>
+  :root {
+    --bg: #08101e;
+    --bg2: #0d1729;
+    --card: #111d30;
+    --card2: #0f1a2b;
+    --border: #1c2e48;
+    --accent: #00c8ff;
+    --green: #4ade80;
+    --warn: #fbbf24;
+    --heat: #f97316;
+    --purple: #a78bfa;
+    --text: #f0f4ff;
+    --text2: #94afd4;
+    --text3: #5a7499;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    background-image:
+      linear-gradient(var(--bg2) 1px, transparent 1px),
+      linear-gradient(90deg, var(--bg2) 1px, transparent 1px);
+    background-size: 32px 32px;
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+  .mono { font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace; }
+
+  /* ---------- hero ---------- */
+  .hero {
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--bg2), transparent);
+    padding: 56px 0 40px;
+    position: relative;
+  }
+  .hero::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--accent);
+  }
+  .hero h1 { font-size: 52px; letter-spacing: 2px; color: var(--accent); }
+  .hero .tag { font-size: 18px; font-weight: 700; margin-top: 6px; }
+  .hero .sub { color: var(--text3); margin-top: 4px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+  .badge {
+    font-size: 12px; font-weight: 700; letter-spacing: 1px;
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 6px 14px; color: var(--text2); background: var(--card);
+  }
+  .badge b { color: var(--accent); }
+  .hero .price-line { margin-top: 26px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .price-big { font-size: 34px; font-weight: 800; }
+  .price-big small { font-size: 14px; font-weight: 400; color: var(--text3); display: block; }
+  .cta {
+    display: inline-block; background: var(--accent); color: #04121c;
+    font-weight: 800; font-size: 16px; padding: 13px 30px; border-radius: 8px;
+    text-decoration: none; transition: transform .1s ease, box-shadow .1s ease;
+  }
+  .cta:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(0,200,255,.35); }
+  .cta.ghost {
+    background: transparent; color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+
+  /* ---------- sections ---------- */
+  section { padding: 44px 0 8px; }
+  .label {
+    font-size: 13px; letter-spacing: 2px; color: var(--text3);
+    border-left: 3px solid var(--accent); padding-left: 12px;
+    text-transform: uppercase; font-weight: 700; margin-bottom: 22px;
+  }
+  h2 { font-size: 26px; margin-bottom: 10px; }
+  p.lead { color: var(--text2); max-width: 760px; }
+
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px;
+  }
+  .card h3 { font-size: 15px; margin-bottom: 8px; letter-spacing: .5px; }
+  .card p { font-size: 13.5px; color: var(--text2); }
+  .card.acc { border-color: var(--accent); } .card.acc h3 { color: var(--accent); }
+  .card.grn { border-color: var(--green); } .card.grn h3 { color: var(--green); }
+  .card.pur { border-color: var(--purple); } .card.pur h3 { color: var(--purple); }
+  .card.wrn { border-color: var(--warn); } .card.wrn h3 { color: var(--warn); }
+
+  /* ---------- how it works ---------- */
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 24px; }
+  .step { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 18px; position: relative; }
+  .step .n {
+    font-size: 12px; font-weight: 800; color: var(--accent);
+    letter-spacing: 1px; margin-bottom: 8px;
+  }
+  .step h4 { font-size: 14px; margin-bottom: 6px; }
+  .step p { font-size: 12.5px; color: var(--text2); }
+
+  .shot { margin-top: 26px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .shot img { display: block; width: 100%; height: auto; }
+  .shot-cap { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; padding: 14px 18px; border-top: 1px solid var(--border); }
+  .shot-cap span { font-size: 12.5px; color: var(--text2); }
+  @media (max-width: 760px) { .shot-cap { grid-template-columns: 1fr; } }
+
+  /* ---------- evidence ---------- */
+  .study {
+    background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--accent);
+    border-radius: 10px; padding: 22px 24px; margin-top: 20px;
+  }
+  .study p { color: var(--text2); font-size: 14.5px; }
+  .study b { color: var(--text); }
+  .vs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
+  .vs .card ul { list-style: none; }
+  .vs .card li { font-size: 13.5px; color: var(--text2); padding: 7px 0 7px 20px; position: relative; border-bottom: 1px dashed var(--border); }
+  .vs .card li:last-child { border-bottom: none; }
+  .vs .card li::before { position: absolute; left: 0; font-weight: 700; }
+  .vs .limits li::before { content: "✕"; color: var(--heat); }
+  .vs .unlocks li::before { content: "✓"; color: var(--green); }
+  .vs .card li b { color: var(--text); }
+
+  /* ---------- tiers ---------- */
+  .tier { text-align: left; }
+  .tier .pct { font-size: 30px; font-weight: 800; }
+  .tier .kind { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 700; margin-bottom: 10px; }
+  .tier.t1 .pct, .tier.t1 .kind { color: var(--accent); }
+  .tier.t2 .pct, .tier.t2 .kind { color: var(--warn); }
+  .tier.t3 .pct, .tier.t3 .kind { color: var(--green); }
+  .tier .basis { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: 1px; padding: 2px 8px; border-radius: 4px; margin-bottom: 10px; }
+  .basis.study-b { background: rgba(0,200,255,.12); color: var(--accent); }
+  .basis.est-b { background: rgba(251,191,36,.12); color: var(--warn); }
+
+  /* ---------- comparison table ---------- */
+  table { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 14px; }
+  th, td { padding: 14px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text3); }
+  td.num { text-align: right; white-space: nowrap; font-weight: 700; }
+  tr.hl { background: rgba(74,222,128,.06); }
+  tr.hl td:first-child { border-left: 3px solid var(--green); }
+  td .name { font-weight: 700; display: block; margin-bottom: 3px; }
+  td .note { font-size: 12.5px; color: var(--text2); }
+  tr.hl .name { color: var(--green); }
+
+  /* ---------- payback ---------- */
+  .calc {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 26px; margin-top: 22px;
+  }
+  .calc .row { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .calc label { font-size: 14px; color: var(--text2); }
+  .calc .val { font-weight: 800; color: var(--accent); font-size: 18px; }
+  input[type=range] { width: 100%; margin: 16px 0 6px; accent-color: var(--accent); }
+  .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0 4px; }
+  .opt {
+    display: block; font-size: 14px; color: var(--text); cursor: pointer;
+    background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
+  }
+  .opt input { accent-color: var(--accent); margin-right: 8px; }
+  .opt-note { display: block; font-size: 11.5px; color: var(--text3); margin-top: 4px; margin-left: 24px; }
+  @media (max-width: 760px) { .opts { grid-template-columns: 1fr; } }
+  .calc .result { margin-top: 14px; font-size: 15px; }
+  .calc .result b { font-size: 22px; color: var(--green); }
+  .calc .disclaimer { font-size: 12px; color: var(--text3); font-style: italic; margin-top: 12px; }
+
+  /* ---------- fine print ---------- */
+  .fine { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 22px 26px; margin-top: 20px; }
+  .fine ul { list-style: none; columns: 2; column-gap: 40px; }
+  .fine li { font-size: 13px; color: var(--text2); padding: 6px 0 6px 18px; position: relative; break-inside: avoid; }
+  .fine li::before { content: "—"; position: absolute; left: 0; color: var(--text3); }
+  .fine b { color: var(--text); }
+
+  /* ---------- final cta ---------- */
+  .final {
+    text-align: center; padding: 52px 0 60px; margin-top: 40px;
+    border-top: 1px solid var(--border); background: linear-gradient(0deg, var(--bg2), transparent);
+  }
+  .final h2 { font-size: 30px; }
+  .final p { color: var(--text2); margin: 10px 0 26px; }
+
+  footer { border-top: 1px solid var(--border); padding: 26px 0 40px; }
+  footer .refs p { font-size: 11.5px; color: var(--text3); font-style: italic; margin-bottom: 8px; }
+  footer .tagline { margin-top: 16px; font-size: 12px; color: var(--text3); }
+  footer .tagline span { color: var(--accent); font-weight: 700; }
+
+  sup a { color: var(--accent); text-decoration: none; font-size: 11px; }
+
+  @media (max-width: 760px) {
+    .grid3, .steps, .vs, .grid2 { grid-template-columns: 1fr; }
+    .fine ul { columns: 1; }
+    .hero h1 { font-size: 40px; }
+    th:nth-child(2), td:nth-child(2) { display: none; } /* hide per-year col on mobile */
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div class="wrap">
+    <h1>ODIN</h1>
+    <div class="tag">Set your comfort band. ODIN handles the rest.</div>
+    <div class="sub">Model Predictive Control for your Mitsubishi Ecodan / Zubadan — built for Asgard</div>
+
+    <div class="badges mono">
+      <span class="badge"><b>ONE-TIME</b> PURCHASE</span>
+      <span class="badge"><b>NO</b> SUBSCRIPTION</span>
+      <span class="badge"><b>100%</b> LOCAL — NO CLOUD</span>
+      <span class="badge"><b>REAL</b> HOUSE PHYSICS</span>
+    </div>
+
+    <div class="price-line">
+      <div class="price-big">€199<small>introduction price — one-time, incl. VAT — add-on for Asgard</small></div>
+      <a class="cta" href="#order">Order ODIN</a>
+      <a class="cta ghost" href="https://github.com/gekkekoe/heatpump-optimizer#readme">Read the manual</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- ================= WHY ================= -->
+<section>
+  <div class="label mono">01 · Why ODIN</div>
+  <h2>You already control your heat pump. Now let it think ahead.</h2>
+  <p class="lead">
+    Asgard gives you full local control. ODIN adds the brain: an on-device
+    <b>Model Predictive Control (MPC)</b> engine that rebuilds an optimized 48-hour plan every hour,
+    combining day-ahead electricity prices, solar &amp; weather forecasts, and a physics model of
+    <i>your</i> house — learned from your own measurements.
+  </p>
+
+  <div class="grid3">
+    <div class="card acc">
+      <h3>REAL HOUSE PHYSICS</h3>
+      <p>ODIN learns your home's heat loss, thermal mass and passive solar gain from real measured
+      data — a physical model of your house, not a timer or a generic profile.</p>
+    </div>
+    <div class="card grn">
+      <h3>SET &amp; FORGET</h3>
+      <p>Set your comfort band once (e.g. 20.5–22.5&nbsp;°C). ODIN plans every hour of heating,
+      cooling and hot water within it — automatically, day after day. No daily fiddling.</p>
+    </div>
+    <div class="card pur">
+      <h3>100% LOCAL</h3>
+      <p>All computation runs on the device. No cloud, no account, no subscription —
+      your data never leaves your home.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= HOW ================= -->
+<section>
+  <div class="label mono">02 · How it works</div>
+  <h2>Measure. Learn. Forecast. Plan.</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="n mono">STEP 1</div>
+      <h4>Measure</h4>
+      <p>Asgard reads your heat pump's real consumption, output, runtime and temperatures — every day.</p>
+    </div>
+    <div class="step">
+      <div class="n mono">STEP 2</div>
+      <h4>Learn</h4>
+      <p>ODIN derives your house's thermal time constant, heat loss and passive solar gain from that data. The model self-corrects across seasons.</p>
+    </div>
+    <div class="step">
+      <div class="n mono">STEP 3</div>
+      <h4>Forecast</h4>
+      <p>Day-ahead prices and a 48-hour weather &amp; irradiance forecast are fetched (or pushed locally from Home Assistant).</p>
+    </div>
+    <div class="step">
+      <div class="n mono">STEP 4</div>
+      <h4>Plan</h4>
+      <p>Every hour, the solver rebuilds a cost-optimized plan for heating, cooling and hot water — always within your comfort band.</p>
+    </div>
+  </div>
+
+  <div class="shot">
+    <img src="img/odin-dashboard.png" alt="Asgard Solver dashboard: room temperature tracking the model prediction, consumption planned into solar hours" loading="lazy">
+    <div class="shot-cap">
+      <span><b style="color:var(--warn)">■</b> Actual room temperature tracking the model's prediction — the learned physics model at work.</span>
+      <span><b style="color:var(--green)">■</b> Consumption planned into the solar window; a full day of heating for €0.15 grid cost (sunny day, June).</span>
+    </div>
+  </div>
+</section>
+
+<!-- ================= EVIDENCE ================= -->
+<section>
+  <div class="label mono">03 · The evidence</div>
+  <h2>Grounded in peer-reviewed research</h2>
+
+  <div class="study">
+    <p>
+      A 97-day field study published in <i>Applied Energy</i> (2023) tested the same class of
+      Model Predictive Control on a real, occupied family home with a heat pump. Shifting energy
+      demand away from expensive evening price peaks reduced heating costs by
+      <b>up to 17%</b><sup><a href="#ref1">[1]</a></sup> — under winter-only conditions and with
+      significant hardware limitations.
+    </p>
+  </div>
+
+  <div class="vs">
+    <div class="card limits">
+      <h3 style="color:var(--heat)">Where the study stopped</h3>
+      <ul>
+        <li><b>Heavy control delays:</b> the setup could not start the heat pump on demand — 60–120 minutes of physical lag.</li>
+        <li><b>No hot-water integration:</b> the expensive auxiliary immersion heater fired at random moments during price spikes.</li>
+        <li><b>Winter only:</b> tested November–March, missing all solar gains of the shoulder seasons.</li>
+      </ul>
+    </div>
+    <div class="card unlocks">
+      <h3 style="color:var(--green)">Where ODIN goes further</h3>
+      <ul>
+        <li><b>Instant compressor execution</b> via Asgard — ODIN can act on any hourly price window.</li>
+        <li><b>Integrated DHW scheduling</b> locks hot water into the cheapest hour first, avoiding aux-heater fallbacks.</li>
+        <li><b>Year-round solar optimisation</b> steers runtime into forecast irradiance windows in every season.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid3">
+    <div class="card tier t1">
+      <div class="kind mono">Load shifting</div>
+      <span class="basis study-b mono">FIELD STUDY — OCCUPIED HOME</span>
+      <div class="pct">up to 17%</div>
+      <p>Demand shifts away from evening price peaks using the building's thermal mass.
+      Demonstrated on a real occupied home with floor heating — despite the control delays and
+      missing DHW integration described above.<sup><a href="#ref1">[1]</a></sup></p>
+    </div>
+    <div class="card tier t2">
+      <div class="kind mono">+ Thermal mass, well executed</div>
+      <span class="basis study-b mono">SIMULATION STUDY</span>
+      <div class="pct">25–35%</div>
+      <p>What load shifting can achieve when the controller acts instantly: for a heat pump with
+      water-based floor heating and price-optimized MPC, Halvgaard et al. report 25–35% electricity
+      cost savings versus constant-price operation.<sup><a href="#ref4">[4]</a></sup></p>
+    </div>
+    <div class="card tier t3">
+      <div class="kind mono">+ Solar PV</div>
+      <span class="basis study-b mono">LONG-TERM EXPERIMENT</span>
+      <div class="pct">avg 34%</div>
+      <p>In a long-term experimental study of MPC heat pump control with PV, Kuboth et al. measured
+      an <b>average 34%</b> operational cost reduction (up to 51.8%), with strongly increased PV
+      self-consumption.<sup><a href="#ref3">[3]</a></sup> Test-rig conditions — real homes vary.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= COMPARISON ================= -->
+<section>
+  <div class="label mono">04 · The honest comparison</div>
+  <h2>Including the options that are cheaper than us</h2>
+  <p class="lead">
+    To be clear: none of these offer the same thing. EMHASS comes closest in spirit (local
+    optimization, but generic), and commercial cloud subscriptions optimize to a certain extent
+    (but off-site, by subscription). A BMS interface doesn't optimize at all. The table shows what
+    each route realistically costs to get <i>some</i> form of smart control.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Option</th><th style="text-align:right">Per year</th><th style="text-align:right">5-year total</th></tr>
+    </thead>
+    <tbody>
+      <tr class="hl">
+        <td>
+          <span class="name">ODIN — add-on for Asgard</span>
+          <span class="note">The complete optimizer on top of the Asgard interface you already need for
+          local control. Set your comfort band — the system handles the rest. 1-yr hardware warranty.</span>
+        </td>
+        <td class="num">€0</td>
+        <td class="num">€199</td>
+      </tr>
+      <tr>
+        <td>
+          <span class="name" style="color:var(--purple)">Cloud subscription services</span>
+          <span class="note">Commercial smart-control subscriptions — they optimise to a certain extent,
+          but in the cloud, with an account, and costs that never stop. No learned house-physics model
+          running in your own home.</span>
+        </td>
+        <td class="num">€50–80</td>
+        <td class="num">€350–650</td>
+      </tr>
+      <tr>
+        <td>
+          <span class="name" style="color:var(--heat)">Commercial BMS route</span>
+          <span class="note">The official Modbus/BMS interface (~€215) is an <i>interface only</i> —
+          no optimizer. Add a BMS/PLC plus integration hours on top.</span>
+        </td>
+        <td class="num">—</td>
+        <td class="num">€650+</td>
+      </tr>
+      <tr>
+        <td>
+          <span class="name" style="color:var(--text3)">Full DIY (HA + EMHASS)</span>
+          <span class="note">The closest alternative in spirit: free, local optimization. But EMHASS is
+          a generic load scheduler with a simplified thermal model — no learned house physics, no direct
+          DHW/compressor control — and a lot of hours of setup and tuning.</span>
+        </td>
+        <td class="num">your time</td>
+        <td class="num">€25 + hours</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= PAYBACK ================= -->
+<section>
+  <div class="label mono">05 · Payback</div>
+  <h2>Do the math with your own numbers</h2>
+  <p class="lead">We won't promise you a saving — it depends on your contract, climate and house.
+  So pick your own assumption and see what €199 means:</p>
+
+  <div class="calc">
+    <div class="row">
+      <label for="cost">Your heat pump's electricity cost</label>
+      <span class="val mono" id="costVal">€1,000 / year</span>
+    </div>
+    <input type="range" id="cost" min="400" max="2500" step="50" value="1000">
+
+    <div class="opts">
+      <label class="opt"><input type="checkbox" id="tm" checked>
+        Floor heating / high thermal mass
+        <span class="opt-note">well-executed load shifting: 25–35% in simulation<sup><a href="#ref4">[4]</a></sup></span>
+      </label>
+      <label class="opt"><input type="checkbox" id="pv" checked>
+        Solar PV
+        <span class="opt-note">avg 34% cost reduction measured with MPC + PV<sup><a href="#ref3">[3]</a></sup></span>
+      </label>
+    </div>
+
+    <div class="result">
+      Literature-based saving range: <b id="saveRange">€120–450 / year</b><br>
+      <span style="color:var(--text2)">…so the €199 pays for itself in</span> <b id="pbRange">≈ 0.4–1.7 years</b>
+    </div>
+    <div class="disclaimer">
+      Ranges combine the field study (up to 17%, occupied home<sup><a href="#ref1">[1]</a></sup>),
+      the Halvgaard simulation (25–35% with floor heating<sup><a href="#ref4">[4]</a></sup>) and the
+      Kuboth long-term experiment (avg 34% with PV<sup><a href="#ref3">[3]</a></sup>). The low end is
+      deliberately conservative; your result depends on your contract, climate and house. After
+      payback, every saved euro is yours — no subscription keeps ticking.
+    </div>
+  </div>
+</section>
+
+<!-- ================= FINE PRINT ================= -->
+<section>
+  <div class="label mono">06 · The honest fine print</div>
+  <h2>What we won't promise</h2>
+  <div class="fine">
+    <ul>
+      <li>Meaningful savings require a <b>dynamic price contract</b>; on a flat tariff ODIN mainly optimises solar self-consumption and comfort.</li>
+      <li>ODIN is an <b>add-on</b>: it requires Asgard hardware and cannot run standalone.</li>
+      <li>The physics model needs <b>±1 week to learn</b> your house — the first days are not optimal.</li>
+      <li>Savings scale with your <b>comfort band</b>: a wide band (e.g. ±1.5&nbsp;°C) gives the solver room to shift load; a very tight band leaves little to optimize.</li>
+      <li>Solar and weather forecasts are <b>estimates</b>; ODIN mitigates with safety margins, not magic.</li>
+      <li><b>Home use only</b> — no commercial deployments.</li>
+      <li>All percentages are <b>up-to ceilings</b> from published studies (field, simulation and lab) — not a guarantee for your house.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= FINAL CTA ================= -->
+<div class="final" id="order">
+  <div class="wrap">
+    <h2>ODIN — €199, once.</h2>
+    <p>Introduction price. No subscription, no cloud, no daily fiddling: set your comfort band and
+    let the solver work.</p>
+    <a class="cta" href="https://buy.stripe.com/aFa6oIblrcIPaNN3Wq4AU00">Order ODIN — €199</a>
+    <p style="margin-top:18px; font-size:12.5px; color:var(--text3)">
+      Requires Asgard. Questions first? Ask in the
+      <a href="https://github.com/gekkekoe/heatpump-optimizer/discussions" style="color:var(--accent)">GitHub discussions</a>.
+    </p>
+  </div>
+</div>
+
+<!-- ================= FOOTER / REFS ================= -->
+<footer>
+  <div class="wrap">
+    <div class="refs">
+      <p id="ref1"><b>[1]</b> Thorsteinsson, S., et al. (2023). Long-term experimental study of price responsive predictive control in a real occupied single-family house with heat pump. <i>Applied Energy</i>, 347, 121398.</p>
+      <p id="ref2"><b>[2]</b> Hu, M., Xiao, F., et al. (2019). Price-responsive model predictive control of floor heating systems for demand response using building thermal mass. <i>Applied Thermal Engineering</i>, 153, 316–329.</p>
+      <p id="ref3"><b>[3]</b> Kuboth, S., et al. (2020). Experimental long-term investigation of model predictive heat pump control in residential buildings with PV generation. <i>Energies</i>, 13(22), 6016. — <a href="https://doi.org/10.3390/en13226016" style="color:var(--accent)">doi:10.3390/en13226016</a></p>
+      <p id="ref4"><b>[4]</b> Halvgaard, R., Poulsen, N.K., Madsen, H., Jørgensen, J.B. (2012). Economic Model Predictive Control for building climate control in a Smart Grid. <i>IEEE PES Innovative Smart Grid Technologies (ISGT)</i>. Reported 25–35% electricity cost savings for a heat pump with water-based floor heating.</p>
+    </div>
+    <div class="tagline mono">Runs fully local on ESP32 — no cloud dependency, no subscription, no data sharing. <span>ASGARD | ODIN MPC ENGINE</span></div>
+  </div>
+</footer>
+
+</div><!-- /wrap -->
+
+<script>
+  const cost = document.getElementById('cost');
+  const costVal = document.getElementById('costVal');
+  const tm = document.getElementById('tm');
+  const pv = document.getElementById('pv');
+  const saveRange = document.getElementById('saveRange');
+  const pbRange = document.getElementById('pbRange');
+  const PRICE = 199;
+
+  function fmtYears(y) {
+    if (y <= 0.75) return '< 1 heating season';
+    return '≈ ' + y.toFixed(1) + ' yrs';
+  }
+
+  function update() {
+    const c = parseInt(cost.value, 10);
+    costVal.textContent = '€' + c.toLocaleString('en-US') + ' / year';
+
+    // Literature-based percentage ranges (fractions):
+    // base load shifting on a dynamic contract: 5–15% (conservative floor of [1])
+    // + thermal mass / floor heating, well executed: up to 30–35% [1][4]
+    // + solar PV self-consumption: avg 34%, up to ~50% measured [3] — capped at 45% here
+    let lo = 0.05, hi = 0.15;
+    if (tm.checked) { lo += 0.03; hi += 0.15; }
+    if (pv.checked) { lo += 0.04; hi += 0.15; }
+    hi = Math.min(hi, 0.45);
+
+    const sLo = Math.round(c * lo / 10) * 10;
+    const sHi = Math.round(c * hi / 10) * 10;
+    saveRange.textContent = '€' + sLo + '–' + sHi + ' / year';
+
+    const yFast = PRICE / sHi;
+    const ySlow = PRICE / sLo;
+    if (yFast <= 0.75 && ySlow <= 1.1) {
+      pbRange.textContent = '< 1 heating season';
+    } else {
+      pbRange.textContent = fmtYears(yFast) + ' – ' + fmtYears(ySlow).replace('≈ ', '');
+    }
+  }
+  cost.addEventListener('input', update);
+  tm.addEventListener('change', update);
+  pv.addEventListener('change', update);
+  update();
+</script>
+
+</body>
+</html>
