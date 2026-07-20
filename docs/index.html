@@ -297,7 +297,7 @@
 
   <div class="study">
     <p>
-      A 97-day field study published in <i>Applied Energy</i> (2023) tested the same class of
+      A four-month field study published in <i>Applied Energy</i> (2023) tested the same class of
       Model Predictive Control on a real, occupied family home with a heat pump. Shifting energy
       demand away from expensive evening price peaks reduced heating costs by
       <b>up to 17%</b><sup><a href="#ref1">[1]</a></sup> — under winter-only conditions and with
@@ -329,25 +329,27 @@
       <div class="kind mono">Load shifting</div>
       <span class="basis study-b mono">FIELD STUDY — OCCUPIED HOME</span>
       <div class="pct">up to 17%</div>
-      <p>Demand shifts away from evening price peaks using the building's thermal mass.
-      Demonstrated on a real occupied home with floor heating — despite the control delays and
-      missing DHW integration described above.<sup><a href="#ref1">[1]</a></sup></p>
+      <p>Demand shifts away from evening price peaks using the building's thermal mass. Demonstrated
+      on a real occupied home with floor heating over four months — the range depends on the comfort
+      level chosen, despite the control delays and missing DHW integration described
+      above.<sup><a href="#ref1">[1]</a></sup></p>
     </div>
     <div class="card tier t2">
       <div class="kind mono">+ Thermal mass, well executed</div>
       <span class="basis study-b mono">SIMULATION STUDY</span>
-      <div class="pct">25–35%</div>
+      <div class="pct">25–33%</div>
       <p>What load shifting can achieve when the controller acts instantly: for a heat pump with
-      water-based floor heating and price-optimized MPC, Halvgaard et al. report 25–35% electricity
-      cost savings versus constant-price operation.<sup><a href="#ref4">[4]</a></sup></p>
+      water-based floor heating and price-optimized MPC, Halvgaard et al.'s simulation reports
+      "the optimized operating strategy saves 25–33% of the electricity cost" versus constant-price
+      operation.<sup><a href="#ref2">[2]</a></sup></p>
     </div>
     <div class="card tier t3">
       <div class="kind mono">+ Solar PV</div>
-      <span class="basis study-b mono">LONG-TERM EXPERIMENT</span>
+      <span class="basis study-b mono">SHORT-TERM TEST-RIG TRIALS</span>
       <div class="pct">avg 34%</div>
-      <p>In a long-term experimental study of MPC heat pump control with PV, Kuboth et al. measured
-      an <b>average 34%</b> operational cost reduction (up to 51.8%), with strongly increased PV
-      self-consumption.<sup><a href="#ref3">[3]</a></sup> Test-rig conditions — real homes vary.</p>
+      <p>In six 120-hour test-rig trials, Kuboth et al. measured an <b>average 34.0%</b> reduction in
+      heat pump operating costs (up to 51.8% in the best trial), with PV self-consumption raised by an
+      average 234.8%.<sup><a href="#ref3">[3]</a></sup></p>
     </div>
   </div>
 </section>
@@ -427,11 +429,11 @@
     <div class="opts">
       <label class="opt"><input type="checkbox" id="tm" checked>
         Floor heating / high thermal mass
-        <span class="opt-note">well-executed load shifting: 25–35% in simulation<sup><a href="#ref4">[4]</a></sup></span>
+        <span class="opt-note">well-executed load shifting: 25–33% in simulation<sup><a href="#ref2">[2]</a></sup></span>
       </label>
       <label class="opt"><input type="checkbox" id="pv" checked>
         Solar PV
-        <span class="opt-note">avg 34% cost reduction measured with MPC + PV<sup><a href="#ref3">[3]</a></sup></span>
+        <span class="opt-note">avg 34% cost reduction in short-term MPC + PV trials<sup><a href="#ref3">[3]</a></sup></span>
       </label>
     </div>
 
@@ -440,11 +442,11 @@
       <span style="color:var(--text2)">…so the €199 pays for itself in</span> <b id="pbRange">≈ 0.4–1.7 years</b>
     </div>
     <div class="disclaimer">
-      Ranges combine the field study (up to 17%, occupied home<sup><a href="#ref1">[1]</a></sup>),
-      the Halvgaard simulation (25–35% with floor heating<sup><a href="#ref4">[4]</a></sup>) and the
-      Kuboth long-term experiment (avg 34% with PV<sup><a href="#ref3">[3]</a></sup>). The low end is
-      deliberately conservative; your result depends on your contract, climate and house. After
-      payback, every saved euro is yours — no subscription keeps ticking.
+      Ranges combine the field study (2–17%, occupied home, four months<sup><a href="#ref1">[1]</a></sup>),
+      the Halvgaard simulation (25–33% with floor heating<sup><a href="#ref2">[2]</a></sup>) and Kuboth's
+      short-term test-rig trials (avg 34% with PV<sup><a href="#ref3">[3]</a></sup>). The low end here is
+      deliberately conservative; your result depends on your contract, climate and house. After payback,
+      every saved euro is yours — no subscription keeps ticking.
     </div>
   </div>
 </section>
@@ -461,7 +463,7 @@
       <li>Savings scale with your <b>comfort band</b>: a wide band (e.g. ±1.5&nbsp;°C) gives the solver room to shift load; a very tight band leaves little to optimize.</li>
       <li>Solar and weather forecasts are <b>estimates</b>; ODIN mitigates with safety margins, not magic.</li>
       <li><b>Home use only</b> — no commercial deployments.</li>
-      <li>All percentages are <b>up-to ceilings</b> from published studies (field, simulation and lab) — not a guarantee for your house.</li>
+      <li>All percentages are from <b>published studies</b> (field, simulation and lab test rigs) — not a guarantee for your house.</li>
     </ul>
   </div>
 </section>
@@ -475,7 +477,7 @@
     <a class="cta" href="https://buy.stripe.com/aFa6oIblrcIPaNN3Wq4AU00">Order ODIN — €199</a>
     <p style="margin-top:18px; font-size:12.5px; color:var(--text3)">
       Requires Asgard. Questions first? Ask in the
-      <a href="https://github.com/gekkekoe/esphome-ecodan-hp/discussions" style="color:var(--accent)">GitHub discussions</a>.
+      <a href="https://github.com/gekkekoe/heatpump-optimizer/discussions" style="color:var(--accent)">GitHub discussions</a>.
     </p>
   </div>
 </div>
@@ -484,10 +486,9 @@
 <footer>
   <div class="wrap">
     <div class="refs">
-      <p id="ref1"><b>[1]</b> Thorsteinsson, S., et al. (2023). Long-term experimental study of price responsive predictive control in a real occupied single-family house with heat pump. <i>Applied Energy</i>, 347, 121398.</p>
-      <p id="ref2"><b>[2]</b> Hu, M., Xiao, F., et al. (2019). Price-responsive model predictive control of floor heating systems for demand response using building thermal mass. <i>Applied Thermal Engineering</i>, 153, 316–329.</p>
-      <p id="ref3"><b>[3]</b> Kuboth, S., et al. (2020). Experimental long-term investigation of model predictive heat pump control in residential buildings with PV generation. <i>Energies</i>, 13(22), 6016. — <a href="https://doi.org/10.3390/en13226016" style="color:var(--accent)">doi:10.3390/en13226016</a></p>
-      <p id="ref4"><b>[4]</b> Halvgaard, R., Poulsen, N.K., Madsen, H., Jørgensen, J.B. (2012). Economic Model Predictive Control for building climate control in a Smart Grid. <i>IEEE PES Innovative Smart Grid Technologies (ISGT)</i>. Reported 25–35% electricity cost savings for a heat pump with water-based floor heating.</p>
+      <p id="ref1"><b>[1]</b> Thorsteinsson, S., Kalaee, A.A.S., Vogler-Finck, P., Stærmose, H.L., Katic, I., Bendtsen, J.D. (2023). Long-term experimental study of price responsive predictive control in a real occupied single-family house with heat pump. <i>Applied Energy</i>, 347, 121398. Quote: "The cost reduction from the controller ranged from 2-17% depending on the chosen comfort level." — <a href="https://doi.org/10.1016/j.apenergy.2023.121398" style="color:var(--accent)">doi:10.1016/j.apenergy.2023.121398</a></p>
+      <p id="ref2"><b>[2]</b> Halvgaard, R., Poulsen, N.K., Madsen, H., Jørgensen, J.B. (2012). Economic Model Predictive Control for building climate control in a Smart Grid. <i>IEEE PES Innovative Smart Grid Technologies (ISGT)</i>. Simulation study. Quote: "Compared to traditional operation of heat pumps with constant electricity prices, the optimized operating strategy saves 25-33% of the electricity cost." — <a href="https://doi.org/10.1109/ISGT.2012.6175631" style="color:var(--accent)">doi:10.1109/ISGT.2012.6175631</a></p>
+      <p id="ref3"><b>[3]</b> Kuboth, S., Weith, T., Heberle, F., Welzl, M., Brüggemann, D. (2019). Experimental short-term investigation of model predictive heat pump control in residential buildings. <i>Energy and Buildings</i>, 204, 109444. Six 120-hour test-rig trials: average 34.0% cost reduction (up to 51.8%), average COP +22.2%, average PV self-consumption +234.8% (up to 572%), assuming German energy prices. — <a href="https://doi.org/10.1016/j.enbuild.2019.109444" style="color:var(--accent)">doi:10.1016/j.enbuild.2019.109444</a></p>
     </div>
     <div class="tagline mono">Runs fully local on ESP32 — no cloud dependency, no subscription, no data sharing. <span>ASGARD | ODIN MPC ENGINE</span></div>
   </div>
@@ -514,9 +515,9 @@
     costVal.textContent = '€' + c.toLocaleString('en-US') + ' / year';
 
     // Literature-based percentage ranges (fractions):
-    // base load shifting on a dynamic contract: 5–15% (conservative floor of [1])
-    // + thermal mass / floor heating, well executed: up to 30–35% [1][4]
-    // + solar PV self-consumption: avg 34%, up to ~50% measured [3] — capped at 45% here
+    // base load shifting on a dynamic contract: 5-15% (within the 2-17% field-study range, [1])
+    // + thermal mass / floor heating, well executed: simulation reports 25-33% [2]
+    // + solar PV self-consumption: short-term trials avg 34%, up to 51.8% [3] -- capped at 45% here
     let lo = 0.05, hi = 0.15;
     if (tm.checked) { lo += 0.03; hi += 0.15; }
     if (pv.checked) { lo += 0.04; hi += 0.15; }
