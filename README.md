@@ -596,6 +596,48 @@ Think of it as a slider between "maximum savings" and "maximum comfort stability
 
 ---
 
+### DHW Tank Volume (L)
+
+**What it does:** The capacity of your domestic hot water tank. ODIN uses this to estimate the energy a scheduled DHW cycle needs, so the DHW cost in the plan is based on your actual tank instead of a guess.
+
+The estimated heat per cycle is:
+
+```
+heat [kWh] = volume [L] × 4.186 kJ/(L·°C) × ΔT [°C] ÷ 3600
+```
+
+where ΔT is the difference between the tank's current temperature and the DHW target. That heat is divided by the heat pump's COP at the planned hour to get the electricity consumption — and therefore the cost — that appears in the plan. A larger tank therefore costs more per DHW cycle, which is exactly what keeps ODIN from scheduling DHW too eagerly.
+
+**Unit:** litres, `10–2000`.
+
+**Default:** `300`
+
+| Tank type | Typical capacity |
+|-----------|------------------|
+| Compact built-in | 50–100 |
+| External buffer | 100–200 |
+| Common standalone cylinder | 200–300 |
+| Large cylinder | 300–500 |
+
+---
+
+### DHW Tank Sensor
+
+**What it does:** Chooses which tank temperature ODIN uses for DHW scheduling — the trigger point, the cooling projection, and the energy estimate.
+
+| Option | Meaning |
+|--------|---------|
+| **Top probe** | Uses the sensor at the top of the tank only. |
+| **Average (top + bottom)** | Uses the average of the top and bottom sensors. |
+
+**When to use which:** Hot water tanks stratify — the water at the top is warmer than the water underneath, so the top probe reads higher than the tank's true average temperature. If you have a secondary (bottom) tank sensor, **Average** is the more representative value.
+
+> **Note:** **Average** requires the secondary tank sensor. 
+
+**Default:** `top`
+
+---
+
 ### Solar-Only Cooling (toggle)
 
 **What it does:** When this toggle is **on**, ODIN will only plan active cooling during hours when solar production covers at least the minimum solar coverage percentage of the heat pump's electricity consumption. During hours with insufficient solar, cooling is blocked even if the house is above the comfort maximum.
@@ -605,6 +647,26 @@ Think of it as a slider between "maximum savings" and "maximum comfort stability
 **When to leave it off:** If you also want cooling during evenings or overcast periods (where grid electricity is used), leave this off and rely on the standard price-based optimisation instead.
 
 > This setting only affects cooling mode. Heating operation is unaffected.
+
+---
+
+### Zone-2 Solve (select)
+
+**What it does:** For heat pumps that can run **two independently controllable zones** (each zone with its own thermostat and setpoint — for example a ground floor and an upper floor), ODIN plans both zones. There is still only one compressor, so the zones share one capacity budget: the zone that plans first gets the full compressor capacity and the DHW slot, and the other zone plans on whatever capacity is left, hour by hour.
+
+This selection chooses **which zone plans first**:
+
+| Option | Meaning |
+|--------|---------|
+| **Off** (default) | No override — the original single-zone solve runs; zone 2 is not planned. |
+| **Zone 1 first** | Two-zone solve: Zone 1 plans first with full compressor capacity and the DHW slot; Zone 2 is calculated on the residual capacity. |
+| **Zone 2 first** | Two-zone solve: Zone 2 plans first with full compressor capacity and the DHW slot; Zone 1 is calculated on the residual capacity (mirrored). |
+
+> **Note:** This selection only has an effect when the pump reports independently controllable zone temperatures (the `independent_zones` flag in the solve payload). Without that flag ODIN plans a single zone and this selection is ignored.
+
+**When to set it:** The direction is a property of the installation — which zone is primary (for example the heated ground floor with the DHW tank, versus a guest room). Choose it once; ODIN never re-decides it per solve.
+
+**Fallback:** If one of the zone passes fails, ODIN degrades to the single-zone (Zone 1) plan rather than to no plan at all.
 
 ---
 
@@ -1055,6 +1117,24 @@ At the start of every hour, ODIN's optimization engine checks the current tank t
 1. **Triggering the search:** As soon as the tank drops below the ODIN Trigger (e.g., someone washes their hands and it drops to 46.0°C), ODIN knows a DHW run will be needed soon.
 2. **Finding the best slot:** The algorithm scans the upcoming hours in its planning window. It looks for the cheapest available spot—usually an hour with high solar coverage or very low grid prices—*before* it expects the tank to drop all the way to 38°C.
 3. **Locking it in:** Once the optimal hour is found, the engine **locks in the DHW run first**. Because DHW requires the heat pump to run at high temperatures (meaning space heating is paused), ODIN secures the DHW slot and then builds the rest of the space-heating plan around it to ensure they do not clash.
+
+#### Energy Estimate for the Locked Slot
+
+Once a slot is locked, ODIN estimates how much electricity that DHW cycle will draw and reflects it in the plan. The estimate is based on the **DHW Tank Volume** you have set in [Settings → Solver Tuning](#dhw-tank-volume-l):
+
+```
+heat [kWh] = volume [L] × 4.186 kJ/(L·°C) × ΔT [°C] ÷ 3600
+```
+
+where ΔT is the difference between the tank's current temperature and the DHW target. That heat is divided by the heat pump's COP at the planned hour (a warmer source means a higher COP) to get the electricity consumption — and cost — of that hour. This is why a larger tank produces a higher estimated cost per DHW cycle, and why the number tracks your actual tank instead of a fixed value.
+
+#### How ODIN Foresees Tank Cooling
+
+How urgently a DHW slot is needed depends on how fast the tank cools down. ODIN does not assume a fixed rate: it **learns your tank's cooling behaviour** by observing the tank temperature over intervals in which neither DHW nor legionella heating is running, and fitting a cooling constant against the outdoor temperature. This makes the projection season-aware — the same tank cools much faster in January than in March, because the gap to the outdoor temperature is larger.
+
+The constant needs a handful of valid cooling intervals (roughly a day of hourly solves) before ODIN starts using it. Until then — and again for about a day after a factory reset or reflash — ODIN falls back to a generic 0.5 °C per hour, the legacy fixed assumption. The learned value is stored on the device, so a normal restart loses nothing.
+
+The learned constant and the number of observations behind it are visible in the debug output on the [Monitor tab](#13-monitor-tab) (`dhw_loss_k`, `dhw_loss_observations`).
 
 #### Dynamic Adjustments & Hardware Overrides
 Because ODIN recalculates every hour, the plan is highly dynamic. If ODIN schedules a DHW run for 14:00 (the cheapest solar hour), but someone takes a 15-minute shower at 11:00, the algorithm will instantly recalculate at 12:00 to see if it needs to move the heating slot closer.
