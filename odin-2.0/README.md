@@ -275,6 +275,29 @@ For heat pumps that can run **two independently controllable zones** (each zone 
 
 > **Note:** This only has an effect when the pump reports independently controllable zone temperatures. Without that signal ODIN plans a single zone and this selection is ignored. The direction is a property of the installation — choose it once. If one zone pass fails, ODIN degrades to the single-zone plan rather than to no plan at all.
 
+### Heating Flow Limits (°C)
+
+The bounds of the flow temperature ODIN sends to the pump while heating. Every command is clamped to these limits — no plan, correction or defrost fallback can push the flow temperature outside them.
+
+| Field | Description |
+|-------|-------------|
+| **Zone 1 Min / Max** | Lower and upper bound while heating zone 1. |
+| **Zone 2 Min / Max** | Bounds applied when the shared flow temperature feeds zone 2. When both zones are fed in the same hour the limits **intersect**: the effective window is the overlap of both zones' windows. |
+
+A limit published by a connected Asgard forwarder overrides the configured value automatically, per value; a directly connected pump (HeishaMon) publishes no such limits, so these settings are the source of truth there. If a misconfiguration puts Min above Max, ODIN clamps Min up to Max instead of inverting the range.
+
+### Cooling Flow Limits (°C)
+
+| Field | Description |
+|-------|-------------|
+| **Zone 1 Min / Zone 2 Min** | Lower bound of the flow temperature while cooling — the condensation guard. A cooling target sits below the return temperature by construction, so only the floor is enforced; when both zones are fed the floors intersect. |
+
+### From the plan's kWh to a flow temperature
+
+Each cycle ODIN converts the plan's thermal production for the running hour into a flow-temperature target: the required water-side temperature lift follows from the planned kW and the circuit's flow rate, and the target is the return temperature plus that lift, clamped to the flow limits above.
+
+The **flow rate is derived, not read from a sensor**: ODIN back-calculates it from the pump's own published heat output and the measured water-side temperature difference. On HeishaMon this means the optional LPHM flow kit is **not** required — the pump's regular data is enough. While the room loop is not the heat sink (DHW/legionella hours) or the temperatures are missing, the derivation is skipped and ODIN falls back to a load-proportional temperature lift between the profile's base and maximum delta.
+
 ---
 
 ## 9. Settings — Location & Weather
@@ -514,13 +537,7 @@ When a mode other than Off is selected, add one step per period (start hour + ma
 
 ### DHW Tank Volume (L)
 
-The capacity of your domestic hot water tank. ODIN uses this to estimate the energy a scheduled DHW cycle needs, so the DHW cost in the plan is based on your actual tank instead of a guess:
-
-```
-heat [kWh] = volume [L] × 4.186 kJ/(L·°C) × ΔT [°C] ÷ 3600
-```
-
-where ΔT is the difference between the tank's current temperature and the DHW target. That heat is divided by the heat pump's COP at the planned hour to get the electricity consumption — and therefore the cost — that appears in the plan. A larger tank therefore costs more per DHW cycle, which is exactly what keeps ODIN from scheduling DHW too eagerly.
+The capacity of your domestic hot water tank. ODIN uses this to estimate the energy a scheduled DHW cycle needs, so the DHW cost in the plan is based on your actual tank instead of a guess: the bigger the tank and the larger the gap to the target temperature, the more energy the recovery takes, and the plan prices that at the COP of the chosen hour. A larger tank therefore costs more per DHW cycle, which is exactly what keeps ODIN from scheduling DHW too eagerly.
 
 **Default:** `300`
 
@@ -634,7 +651,7 @@ These values are learned automatically from your heat pump's real measured data 
 | **Passive Solar Factor** | kWh per W/m² irradiance — heat entering through windows from sunlight, independent of your PV panels. Learned automatically within 0.002–0.030, starting from a conservative default of 0.005. Typical 0.002–0.015. |
 | **Battery SoC / Max Discharge** | Current battery charge (kWh) and maximum discharge rate (kW). The solver assigns discharge to the most expensive HP hours. Set SoC `0` if you have no battery. |
 | **DHW block** | Live effective tank temperature, target, max allowed drop, start threshold and tank volume as the solver sees them. |
-| **Learned Tank Loss (1/h)** | The tank cooling constant (U·A/C): the tank loses `k × (tank − ambient)` °C per hour, learned from measured tank drift. **Est. Loss Now** converts it to °C/h at the current temperatures — this is the rate the DHW trigger timing uses. Until enough cooling intervals are observed, ODIN falls back to a generic 0.5 °C/h. |
+| **Learned Tank Loss (1/h)** | How strongly your tank's cooling tracks the surrounding temperature, learned from measured tank drift between heating cycles. **Est. Loss Now** translates it to °C/h at the current temperatures — this is the rate the DHW trigger timing uses. Until enough cooling intervals are observed, ODIN falls back to a generic 0.5 °C/h. |
 
 **Typical values** (for sanity-checking what ODIN learned):
 
@@ -660,10 +677,10 @@ These values are learned automatically from your heat pump's real measured data 
 | 0.020–0.030 | Near-passive with extensive south glazing |
 
 Values are learned within a hard 0.002–0.030 envelope and start at 0.005
-on a new install: the factor is physically bounded by your glass area ×
-SHGC (a house with 20 m² of south glass at SHGC 0.7 is ~0.014), and an
-over-estimated factor makes the solver idle through cold hours banking on
-free sun that never shows up.
+on a new install. The factor reflects how much of your glazing actually
+admits useful sunlight, so it stays bounded by the house's real window
+area and glass quality. An over-estimated factor makes the solver idle
+through cold hours banking on free sun that never shows up.
 
 | Battery Max Discharge | Battery system |
 |-----------------------|----------------|
@@ -765,7 +782,7 @@ ODIN does not speak the heat pump bus itself. A small pump-side device does. Cur
 
 The only contract that matters: **the pump-side device must publish and subscribe on the same broker (and topic prefix) as ODIN** — see [Section 7](#7-settings--mqtt) and [Section 20](#20-mqtt-integration). If it cannot join the broker, use the **HP Command URL** HTTP fallback instead.
 
-- **HeishaMon** — ODIN also understands HeishaMon's native `main/+` message stream on the configured HP prefix. Commands still require either the shared broker or the HP Command URL.
+- **HeishaMon** — ODIN also understands HeishaMon's native `main/+` message stream on the configured HP prefix. Commands still require either the shared broker or the HP Command URL. The circuit flow rate is **derived** from the pump's own published heat output and water-side temperatures, so the optional LPHM flow kit is not required. Legionella runs through the pump's native sterilization program: ODIN arms it at the planned hour and releases it when the plan leaves the slot — an idle plan never switches the pump off mid-cycle.
 
 ### Required pump-side control modes
 
@@ -852,13 +869,7 @@ At the start of every hour, ODIN's optimization engine checks the current tank t
 
 #### Energy Estimate for the Locked Slot
 
-Once a slot is locked, ODIN estimates how much electricity that DHW cycle will draw and reflects it in the plan. The estimate is based on the **DHW Tank Volume**:
-
-```
-heat [kWh] = volume [L] × 4.186 kJ/(L·°C) × ΔT [°C] ÷ 3600
-```
-
-where ΔT is the difference between the tank's current temperature and the DHW target. That heat is divided by the heat pump's COP at the planned hour (a warmer source means a higher COP) to get the electricity consumption — and cost — of that hour. This is why a larger tank produces a higher estimated cost per DHW cycle, and why the number tracks your actual tank instead of a fixed value.
+Once a slot is locked, ODIN estimates how much electricity that DHW cycle will draw and reflects it in the plan. The estimate scales with the **DHW Tank Volume** and the gap between the tank's current temperature and the DHW target, converted to electricity at the heat pump's expected COP for that hour (a warmer source means a higher COP). This is why a larger tank produces a higher estimated cost per DHW cycle, and why the number tracks your actual tank instead of a fixed value.
 
 #### How ODIN Foresees Tank Cooling
 
