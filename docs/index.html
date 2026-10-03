@@ -56,9 +56,8 @@
     padding: 6px 14px; color: var(--text2); background: var(--card);
   }
   .badge b { color: var(--accent); }
-  .hero .price-line { margin-top: 26px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-  .price-big { font-size: 34px; font-weight: 800; }
-  .price-big small { font-size: 14px; font-weight: 400; color: var(--text3); display: block; }
+  .compat { margin-top: 12px; }
+  .beta { color: var(--warn); font-weight: 700; font-size: 11px; letter-spacing: .5px; }
   .cta {
     display: inline-block; background: var(--accent); color: #04121c;
     font-weight: 800; font-size: 16px; padding: 13px 30px; border-radius: 8px;
@@ -69,7 +68,6 @@
     background: transparent; color: var(--accent);
     border: 1px solid var(--accent);
   }
-
   /* ---------- sections ---------- */
   section { padding: 44px 0 8px; }
   .label {
@@ -205,7 +203,7 @@
   <div class="wrap">
     <h1>ODIN</h1>
     <div class="tag">Set your comfort band. ODIN handles the rest.</div>
-    <div class="sub">Model Predictive Control for your Mitsubishi Ecodan / Zubadan — built for Asgard</div>
+    <div class="sub">Model Predictive Control for your heat pump — built for Asgard</div>
 
     <div class="badges mono">
       <span class="badge"><b>ONE-TIME</b> PURCHASE</span>
@@ -214,10 +212,11 @@
       <span class="badge"><b>REAL</b> HOUSE PHYSICS</span>
     </div>
 
-    <div class="price-line">
-      <div class="price-big">€199<small>introduction price — one-time, incl. VAT — add-on for Asgard</small></div>
-      <a class="cta" href="#order">Order ODIN</a>
-      <a class="cta ghost" href="https://github.com/gekkekoe/heatpump-optimizer#readme">Read the manual</a>
+    <div class="badges compat mono">
+      <span class="badge"><b>MITSUBISHI</b> ECODAN / ZUBADAN</span>
+      <span class="badge"><b>PANASONIC</b> MQTT <span class="beta">BETA</span></span>
+      <span class="badge"><b>DAIKIN</b> MQTT – MODBUS/TCP <span class="beta">BETA</span></span>
+      <span class="badge"><b>VAILLANT</b> MQTT <span class="beta">BETA</span></span>
     </div>
   </div>
 </header>
@@ -474,11 +473,13 @@
     <h2>ODIN — €199, once.</h2>
     <p>Introduction price. No subscription, no cloud, no daily fiddling: set your comfort band and
     let the solver work.</p>
-    <a class="cta" href="https://buy.stripe.com/aFa6oIblrcIPaNN3Wq4AU00">Order ODIN — €199</a>
+    <a class="cta" href="https://buy.stripe.com/6oU6oI2OVeQX7BBgJc4AU03">Order ODIN — €199</a>
     <p style="margin-top:18px; font-size:12.5px; color:var(--text3)">
-      Requires Asgard. Questions first? Ask in the
+      Requires Asgard for Mitsubishi Ecodan / Zubadan — the Panasonic, Daikin and Vaillant
+      beta integrations connect via MQTT or Modbus. Questions first? Ask in the
       <a href="https://github.com/gekkekoe/esphome-ecodan-hp/discussions" style="color:var(--accent)">GitHub discussions</a>.
     </p>
+    <a class="cta ghost" style="margin-top:16px" href="https://github.com/gekkekoe/heatpump-optimizer/tree/main/odin-2.0">Read the manual</a>
   </div>
 </div>
 
