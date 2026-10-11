@@ -1,0 +1,173 @@
+blueprint:
+  name: Sync a Home Assistant Value to ODIN (REST)
+  description: >
+    Forwards a Home Assistant sensor value to an ODIN device through its REST
+    API, so Home Assistant can feed the solver's numbers without MQTT. Six
+    fields to choose from: the two battery numbers (state of charge in kWh,
+    maximum discharge in kW), the room temperature override of zone 1 or zone 2 —
+    the temperature the planner uses when the pump has no room sensor of its own
+    (or reads the boiler room instead of the living room) — and the buffer
+    discharge override of zone 1 or zone 2, which tells the ODIN that heat is
+    leaving the store into that zone's loop even though the pump's own zone pump
+    says it stands still.
+
+
+    Only valid readings are forwarded: what arrives has to be something the chosen
+    field accepts, and it is written only when it differs from what the ODIN
+    currently holds by more than 0.05. The device stores numbers in single
+    precision, so comparing for exact equality would rewrite the same number on
+    every sensor update and wear at the flash. The discharge fields are a switch
+    on the ODIN, so their value is 1 or 0 and any change at all is written. A
+    source that is `unavailable` or `unknown` is never forwarded.
+
+
+    Accepted bands: battery SOC 0..2000 kWh, discharge limit 0..100 kW, room
+    temperature override 0 (off) or 5..40 °C. The gap between 0 and 5 is refused
+    on purpose — it is the difference between "override off" and "a room that is
+    being heated" — so a reading inside it (a frosty hallway, a sensor that just
+    came back online) is never forwarded and the ODIN keeps whatever it had.
+
+
+    A room temperature override replaces the pump's own room reading wherever the
+    ODIN plans, controls or records the room — the history graph included — and only
+    the building-physics learner leaves it alone, because a typed number cannot
+    measure how fast the house cools. Set the field back to 0 in the ODIN dashboard
+    to hand control back to the sensor. The battery is only planned with while
+    battery planning is enabled on the ODIN.
+
+
+    A discharge override is a different kind of input: it is OR'd with what the
+    pump reports, so it can add a discharge and never deny one. The source is
+    therefore read as a boolean — an `on`/`off` entity maps to 1/0 directly, a
+    numeric source (the external pump's power, a flow sensor) counts as
+    discharging above the threshold below. While the field is 1 the ODIN assumes
+    every idle stretch of that zone is stored heat moving into the room, so it
+    does not learn that zone's heat-loss time constant (tau) or its passive solar
+    gain: run this automation off the thing that actually drives the emitter loop
+    and let it write 0 again when that pump stops, and the learning windows in
+    between stay usable. The same switch is in the ODIN dashboard under Physics
+    Data → Overrides, for an install that discharges all the time.
+  domain: automation
+  input:
+    source_entity:
+      name: Source Sensor
+      description: >
+        The sensor to forward: a battery energy sensor in kWh (for SOC), a power
+        sensor in kW (for the discharge limit), a room temperature sensor in °C
+        (for the room temperature override), or an on/off entity — binary sensor,
+        input boolean, switch — or any numeric sensor (for the discharge
+        override).
+      selector:
+        entity:
+          domain: sensor
+
+    odin_host:
+      name: ODIN Address
+      description: IP or hostname of the ODIN on the LAN (e.g. 192.168.2.190).
+      selector:
+        text: {}
+
+    target_field:
+      name: ODIN Field
+      description: >
+        Which ODIN value this sensor feeds. room_override_z1/_z2 replaces that
+        zone's room temperature for planning; 0 turns the override off.
+        discharge_override_z1/_z2 asserts a buffer discharge for that zone while
+        the source is on (or above the threshold below); off writes 0 and hands
+        the flag back to the pump.
+      default: battery_soc_kwh
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - battery_soc_kwh
+            - battery_max_discharge_kw
+            - room_override_z1
+            - room_override_z2
+            - discharge_override_z1
+            - discharge_override_z2
+
+    discharge_threshold:
+      name: Discharge Threshold
+      description: >
+        Only used by the discharge fields when the source is numeric: a value
+        above this counts as discharging (1), at or below it as not discharging
+        (0). Ignored for an on/off entity. Set it just above the source's noise —
+        e.g. 5 for a power sensor in watts that idles at 0-3 W.
+      default: 0.5
+      selector:
+        number:
+          mode: box
+
+variables:
+  source: !input source_entity
+  host: !input odin_host
+  field: !input target_field
+  threshold: !input discharge_threshold
+  state_str: "{{ states(source) }}"
+  # The two room fields share a band that is not one interval: 0 (off) or
+  # 5..40 °C. Everything else is a plain range.
+  is_room_field: "{{ field in ('room_override_z1', 'room_override_z2') }}"
+  # The discharge fields are a 0/1 switch on the ODIN — any other number is
+  # refused by the device — so the source is reduced to a boolean here.
+  is_discharge_field: "{{ field in ('discharge_override_z1', 'discharge_override_z2') }}"
+  is_on_state: "{{ state_str in ('on', 'true') }}"
+  is_off_state: "{{ state_str in ('off', 'false') }}"
+  bool_value: >-
+    {{ 1 if is_on_state else 0 if is_off_state
+       else (1 if (state_str | float(-99999)) > (threshold | float(0.5)) else 0) }}
+  battery_range: >-
+    {{ {'battery_soc_kwh': [0, 2000],
+        'battery_max_discharge_kw': [0, 100]}.get(field, [0, 2000]) }}
+
+trigger:
+  - platform: state
+    entity_id: !input source_entity
+
+condition:
+  - condition: template
+    value_template: >-
+      {% set raw = states(source) | float(-99999) %}
+      {% if is_discharge_field %}
+        {{ is_on_state or is_off_state or is_number(states(source)) }}
+      {% elif not is_number(states(source)) %}
+        {{ false }}
+      {% elif is_room_field %}
+        {{ raw == 0 or (raw >= 5 and raw <= 40) }}
+      {% else %}
+        {% set lo, hi = battery_range %}
+        {{ raw >= lo and raw <= hi }}
+      {% endif %}
+
+action:
+  - variables:
+      value: "{{ bool_value if is_discharge_field else (states(source) | float(-99999)) }}"
+
+  - service: rest_command.odin_get
+    response_variable: odin_resp
+    continue_on_error: true
+    data:
+      host: "{{ host }}"
+
+  - condition: template
+    value_template: >-
+      {% set v = value | float(-99999) %}
+      {% if odin_resp is defined and odin_resp is not none %}
+        {% set body = odin_resp['content'] %}
+        {% if body is string %}{% set body = body | from_json %}{% endif %}
+        {% if is_discharge_field %}
+          {% set held = body.get(field, false) %}
+          {{ (1 if (held is sameas true or held == 1) else 0) != (1 if v > 0.5 else 0) }}
+        {% else %}
+          {{ (v - (body.get(field, -99999) | float(-99999))) | abs > 0.05 }}
+        {% endif %}
+      {% else %}{{ true }}{% endif %}
+
+  - service: rest_command.odin_set
+    data:
+      host: "{{ host }}"
+      key: "{{ field }}"
+      value: "{{ value }}"
+
+mode: single
+max_exceeded: silent
