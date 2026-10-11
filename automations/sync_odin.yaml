@@ -47,6 +47,16 @@ blueprint:
     and let it write 0 again when that pump stops, and the learning windows in
     between stay usable. The same switch is in the ODIN dashboard under Physics
     Data → Overrides, for an install that discharges all the time.
+
+
+    Needs two RESTful commands in configuration.yaml first - `odin_get` and
+    `odin_set`, 
+
+    A Home Assistant restart re-syncs: the automation also triggers on Home
+    Assistant start and pushes the source's current value once it is known again,
+    so an ODIN that was reflashed or reset while Home Assistant was down is caught
+    up without waiting for the sensor to move. Nothing is written when the two
+    already agree.
   domain: automation
   input:
     source_entity:
@@ -59,7 +69,11 @@ blueprint:
         override).
       selector:
         entity:
-          domain: sensor
+          domain:
+            - sensor
+            - binary_sensor
+            - input_boolean
+            - switch
 
     odin_host:
       name: ODIN Address
@@ -124,6 +138,9 @@ trigger:
   - platform: state
     entity_id: !input source_entity
 
+  - platform: homeassistant
+    event: start
+
 condition:
   - condition: template
     value_template: >-
@@ -140,8 +157,14 @@ condition:
       {% endif %}
 
 action:
+  - wait_template: "{{ states(source) not in (none, 'unknown', 'unavailable') }}"
+    timeout: "00:02:00"
+    continue_on_timeout: false
   - variables:
-      value: "{{ bool_value if is_discharge_field else (states(source) | float(-99999)) }}"
+      # Always a JSON number: 1/0 for the discharge switches, a float otherwise.
+      value: >-
+        {{ (bool_value | int(0)) if is_discharge_field
+           else (states(source) | float(-99999)) }}
 
   - service: rest_command.odin_get
     response_variable: odin_resp

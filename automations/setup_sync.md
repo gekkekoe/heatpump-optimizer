@@ -1,9 +1,33 @@
 # Home Assistant sync configuration
 
+## One-time setup: configuration.yaml
+
+The blueprint below calls two RESTful commands, `odin_get` and `odin_set`. They are
+not part of the blueprint file — Home Assistant reads them from
+`configuration.yaml`, so add them once and restart Home Assistant. They are
+generic: `{{ host }}` is filled in by each automation from its **ODIN Address**
+field, so one pair serves every ODIN on the network.
+
+```yaml
+rest_command:
+  odin_get:
+    url: "http://{{ host }}/dashboard/state"
+    method: GET
+  odin_set:
+    url: "http://{{ host }}/dashboard/set"
+    method: POST
+    payload: '{"key": "{{ key }}", "value": {{ value }}}'
+    content_type: "application/json"
+```
+
+Without these two commands the automation fails with
+`Service rest_command.odin_set not called`. Editing the file needs a Home Assistant
+restart to take effect; the `rest_command.reload` action also picks them up, the
+plain "Reload YAML" button does not.
 
 ### How does this work?
-1. Ensure your Home Assistant instance is running.
-2. Click the blue button above for the version you need.
+1. Ensure your Home Assistant instance is running and the two commands above are loaded.
+2. Click the blue button at the bottom of this page.
 3. Home Assistant will automatically open the import dialog.
 4. You will see a preview of the blueprint and can click **"Import Blueprint"**.
 
@@ -22,7 +46,11 @@ LAN over its REST API — no MQTT needed. Pick the field it feeds:
 | `discharge_override_z1` | on/off entity, or a numeric sensor (pump power, flow) | on / above threshold → 1, off / at or below → 0 |
 | `discharge_override_z2` | idem, for zone 2 | idem |
 
-Create **one automation per field** — six automations if you feed all of them.
+Create **one automation per field** — six automations if you feed all of them. Each
+one pushes on a change of its source **and once when Home Assistant starts up**, so a
+restart of Home Assistant — or an ODIN that was reflashed or reset while Home
+Assistant was down — is caught up without waiting for the sensor to move. A push that
+would change nothing is skipped.
 The **Room Temperature Override** is for an ODIN that has no room sensor of its
 own, or one that reads the boiler room instead of the living room: the number
 replaces the pump's own room reading wherever the ODIN plans, controls or records the
@@ -45,4 +73,4 @@ letting the automation write 0 again when it stops, instead of leaving the dashb
 switch on. Values are only written when they differ from what the ODIN holds, so the
 flash is not written on every sensor update.
 
-[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint URL.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fgekkekoe%2Fheatpump-optimizer%2Fraw%2Fmain%2Fasgard%2Fha_blueprints%2Fsync_odin.yaml)
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint URL.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fgekkekoe%2Fheatpump-optimizer%2Fraw%2Fmain%2Fautomations%2Fsync_odin.yaml)
