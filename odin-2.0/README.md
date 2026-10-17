@@ -138,7 +138,7 @@ Configure how ODIN retrieves electricity prices. A second block on the same step
 | **Price Zone** | Your electricity market region (see the full zone list in [Section 11](#bidding-zone)). |
 | **Data Source** | `Energy-Charts (Free)` requires no account. `ENTSO-E (Requires Token)` uses the official European exchange data and requires a free API token. `epexprijzen (NL only)` reads the Dutch day-ahead price and is described with the other sources in [Section 11](#price-source). `External API (HTTP POST)` disables automatic fetching — prices are pushed to ODIN from an external system (see [Section 20](#20-api-data-feeds--pushing-prices--weather)). |
 | **ENTSO-E API Token** | Only shown when ENTSO-E is selected. Format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`. Get one free at [transparency.entsoe.eu](https://transparency.entsoe.eu). |
-| **Cheap Price Threshold** | Hours at or below this price are considered "cheap" and attract pre-heating (see [Section 11](#cheap-price-kwh)). |
+| **Cheap Price Threshold** | Hours at or below this price are considered "cheap" and attract pre-heating (see [Section 9](#cheap-price-kwh)). |
 | **Off-Peak kWh Penalty** | Extra cost factor applied to grid consumption during non-cheap hours (0.0–1.0). |
 
 ### Step 2 — Geographical Location
@@ -216,7 +216,7 @@ The dashboard has four tabs at the top:
 
 The header strip keeps the pump in view at all times: **HP** (Online, Stale, or **No HP** while nothing has ever reported), **Mode** (what the pump is doing), **Feed** and **Return** water temperatures, **Delta T**, **Ambient**, **Freq** (compressor), **Flow** and **Output**, a **New Firmware** marker that jumps straight to the update when one is waiting, and a Wi-Fi indicator that reads **WiFi ERR** while the connection is down. When several heat pumps are configured, a tab per heat pump appears under those four.
 
-On the **Settings** tab a **search box** filters every field by its own name or by the group it sits in, the card list beside it jumps to a card, and you can still **drag the cards to reorder** them or collapse any card with its header. Each card ends with its own save button — **Apply Heat Pump**, **Apply Location**, **Apply Price**, **Apply DHW**, **Apply Solar**, **Apply MQTT** — and the **Solver Tuning** card adds three more, one per group: **Apply Mixing Tank**, **Apply Solar Rules** and **Apply Battery**. A field's value only reaches the device when the button governing it is pressed; the two schedule tables are the exception and save through **Compile & Send** and **Compile & Send Limits**.
+On the **Settings** tab a **search box** filters every field by its own name or by the group it sits in, the card list beside it jumps to a card, and you can still **drag the cards to reorder** them or collapse any card with its header. Each card ends with its own save button — **Apply Heat Pump**, **Apply Location**, **Apply Price**, **Apply DHW**, **Apply Solar**, **Apply MQTT** — and the **Solver Tuning** card adds four more, one per group: **Apply Price Rules**, **Apply Mixing Tank**, **Apply Solar Rules** and **Apply Battery**. A field's value only reaches the device when the button governing it is pressed; the two schedule tables are the exception and save through **Compile & Send** and **Compile & Send Limits**.
 
 ---
 
@@ -343,7 +343,47 @@ The **flow rate is derived, not read from a sensor**: ODIN back-calculates it fr
 
 ![Solver tuning settings](img/settings-card-tuning.png)
 
-Everything on this card changes *how* ODIN plans, not what the pump is allowed to do. It is split into four groups — **Planning Rules**, **Mixing Tank**, **Solar** and **Battery** — and the search box finds a field by its group name as well as by its own. The three planning rules apply the moment you touch them; the other groups each end with their own save button (**Apply Mixing Tank**, **Apply Solar Rules**, **Apply Battery**) that writes only that group. The battery and buffer-store numbers, together with the button that saves them, appear only while their own switch is on: with **Use Battery for Planning** or **Use Mixing Tank for Planning** off, that group is a single row, because there is nothing there for the solver to size.
+Everything on this card changes *how* ODIN plans, not what the pump is allowed to do. It is split into five groups — **Price**, **Planning Rules**, **Mixing Tank**, **Solar** and **Battery** — and the search box finds a field by its group name as well as by its own. The price thresholds and the planning rules are the knobs people adjust most, which is why they sit at the top; the three planning rules apply the moment you touch them, while the Price, Mixing Tank, Solar and Battery groups each end with their own save button (**Apply Price Rules**, **Apply Mixing Tank**, **Apply Solar Rules**, **Apply Battery**) that writes only that group. The battery and buffer-store numbers, together with the button that saves them, appear only while their own switch is on: with **Use Battery for Planning** or **Use Mixing Tank for Planning** off, that group is a single row, because there is nothing there for the solver to size.
+
+### Price
+
+These four numbers are what the solver *does* with the price it is given; where the price comes from is the Price card ([Section 11](#11-settings--price)). They are here because they are tuning knobs: changing one changes the plan, not the market data. **Apply Price Rules** writes this group.
+
+#### Cheap Price (€/kWh)
+
+Any hour with a price below this threshold is treated as a "cheap" hour. During cheap hours, ODIN applies a very low comfort penalty for running above the target temperature — effectively encouraging pre-heating or aggressive DHW heating whenever prices are very low, even if solar is not available.
+
+The threshold also sets where the **overheat exploit guard** switches on. At negative or near-negative prices ODIN earns money on every kWh it buys, so above the comfort ceiling the penalty grows quadratically instead of linearly — that guard is what stops the optimizer from heating a house it doesn't need to heat just to farm a negative tariff. Because the guard is deliberately harsh, it is scaled by how cheap the hour actually is: **dormant (pure linear penalty) at any price at or above this threshold** — including all fixed tariffs — and ramping to full strength as the price drops below it, reaching full strength at price ≤ 0. This keeps mild afternoon overshoots on a fixed tariff priced as real (mild) discomfort, while deep negative-price hours stay fully protected against the farming exploit.
+
+**Unit:** €/kWh (not €/MWh), all-in consumer price including tax.
+
+| Market / contract | Suggested threshold |
+|-------------------|---------------------|
+| NL dynamic, typical spread | `0.06` |
+| BE / DE with cheap night tariff | `0.05` |
+| Area with frequent negative prices | `0.02` |
+
+#### Stop Price (€/kWh)
+
+Above this price the solver **stops heating/cooling production** entirely (0 or less = disabled). Hours blocked this way are labelled **Stop price** in the calendar view. Useful with very expensive peak tariffs.
+
+#### kWh Penalty (€)
+
+Flat penalty per consumed kWh (e.g. a grid fee). Shifts the solver towards solar and self-consumption. Think of it as a slider between "maximum savings" and "maximum comfort stability":
+
+| Value | Behaviour |
+|-------|-----------|
+| `0.1` | Very aggressive. Large temperature swings. Maximum cost savings. |
+| `0.3` | Recommended for well-insulated or passive houses with UFH. |
+| `0.5` | Balanced. Good starting point for most houses. |
+| `1.0` | Conservative. Pre-heats only when price difference is large. |
+| `2.0` | Minimal optimisation. House stays close to target at all times. |
+
+> **Tip:** Start at `0.5`. Reduce toward `0.3` if your house holds temperature well and you want bigger savings. Increase toward `1.0` if temperature swings feel uncomfortable.
+
+#### Spread (€/hour)
+
+The indifference band between near-equal hours. When two ways of spreading the same heat cost within this much of each other, ODIN is told they are equally good and takes the gentler one: instead of one hour at a high flow temperature it prefers two hours at a lower one. A floor of 2 €/h is always kept, so raising the value only ever makes the plan flatter; leave it empty for that floor. Raise it when the plan looks too peaky for your taste, lower it when you want every last cent of the price curve used.
 
 ### Planning Rules
 
@@ -533,6 +573,8 @@ If your zone is not listed, choose the closest market zone or use **Fixed** pric
 
 ![Price settings](img/settings-card-price.png)
 
+This card answers one question: *where does the price come from?* What ODIN does with that price — cheap and stop thresholds, grid-fee penalty, smoothing band — is on the **Solver Tuning** card ([Section 9](#9-settings--solver-tuning)). Only the rows your current choice needs are on screen: pick **Fixed** and a **Fixed Price** row appears while the **Price Markup** row goes away; pick **ENTSO-E** and the token row appears; pick **Manual** and the **Prices Always Valid** row appears. Nothing is lost by hiding a row — the value you saved stays saved and comes back with the same choice.
+
 ### Price Mode
 
 | Option | When to use |
@@ -540,9 +582,11 @@ If your zone is not listed, choose the closest market zone or use **Fixed** pric
 | **Dynamic** | You have a dynamic electricity contract where the price changes every hour. ODIN fetches today's prices automatically and plans heating around the cheapest hours. |
 | **Fixed** | You pay a flat rate per kWh. ODIN still optimises around comfort and solar, but all hours are treated as equal cost. |
 
+The row directly below this selector changes with it: **Fixed** reveals **Fixed Price** and hides **Price Markup**, **Dynamic** does the opposite. **Apply Price** saves this card's rows.
+
 ### Fixed Price (€/kWh)
 
-*Only used when Price Mode is set to Fixed.* The flat electricity price you pay per kWh, e.g. `0.280` for €0.28/kWh.
+The flat electricity price every hour is planned at, in €/kWh — e.g. `0.280` for €0.28/kWh. Enter it **all-in** (tax and VAT included), because in this mode ODIN does not add anything on top. The row is only shown while the Price Mode is **Fixed**; switching back to **Dynamic** hides it and brings the Markup row back.
 
 ### Price Source
 
@@ -553,53 +597,17 @@ If your zone is not listed, choose the closest market zone or use **Fixed** pric
 | **epexprijzen (NL only)** | Dutch day-ahead prices from the zonneplan feed, rebuilt into your own tariff: the published energy tax is taken off the day-ahead price, your **Price Markup** is added, then VAT layers and the regional energy tax go back on top. Settlement corrections are moved back onto the day they belong to. |
 | **Manual** | No external fetch — prices must be pushed to ODIN by an external system (e.g. Home Assistant, a script, or a custom integration). See [Section 20](#20-api-data-feeds--pushing-prices--weather) for the endpoint and payload format. |
 
-### Prices Always Valid
+### Price Markup (€, ex VAT)
 
-*Only shown when Price Source is set to Manual.* The uploaded manual prices become a **permanent daily pattern**: enter them once (e.g. a fixed day/night tariff) and they repeat every day — no daily re-upload. The first 24 uploaded values define the pattern. Leave off to treat each push as a one-off day (+ tomorrow padding).
+The margin your supplier adds on top of the day-ahead price. Enter it the way it appears on your contract — in **euro per kWh excluding VAT**, not as a percentage or a multiplication factor. It enters every price ODIN plans with, and on the **epexprijzen** source it is also the margin the dutche-tax reconstruction rebuilds your tariff from. The row is only shown while the Price Mode is **Dynamic**: a fixed price already is the price you pay, so there is no margin left to add.
 
 ### ENTSO-E Token
 
-*Only shown when Price Source is set to ENTSO-E.* Your personal API token from the ENTSO-E Transparency Platform. Register for free at [transparency.entsoe.eu](https://transparency.entsoe.eu) and request a Web API security token in your account settings. Format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.
+*Only shown when Price Source is set to **ENTSO-E**.* Your personal API token from the ENTSO-E Transparency Platform. Register for free at [transparency.entsoe.eu](https://transparency.entsoe.eu) and request a Web API security token in your account settings. Format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`. The row disappears the moment you choose another source; the saved token is untouched and returns when you choose ENTSO-E again.
 
-### Cheap Price (€/kWh)
+### Prices Always Valid
 
-Any hour with a price below this threshold is treated as a "cheap" hour. During cheap hours, ODIN applies a very low comfort penalty for running above the target temperature — effectively encouraging pre-heating or aggressive DHW heating whenever prices are very low, even if solar is not available.
-
-The threshold also sets where the **overheat exploit guard** switches on. At negative or near-negative prices ODIN earns money on every kWh it buys, so above the comfort ceiling the penalty grows quadratically instead of linearly — that guard is what stops the optimizer from heating a house it doesn't need to heat just to farm a negative tariff. Because the guard is deliberately harsh, it is scaled by how cheap the hour actually is: **dormant (pure linear penalty) at any price at or above this threshold** — including all fixed tariffs — and ramping to full strength as the price drops below it, reaching full strength at price ≤ 0. This keeps mild afternoon overshoots on a fixed tariff priced as real (mild) discomfort, while deep negative-price hours stay fully protected against the farming exploit.
-
-**Unit:** €/kWh (not €/MWh), all-in consumer price including tax.
-
-| Market / contract | Suggested threshold |
-|-------------------|---------------------|
-| NL dynamic, typical spread | `0.06` |
-| BE / DE with cheap night tariff | `0.05` |
-| Area with frequent negative prices | `0.02` |
-
-### Stop Price (€/kWh)
-
-Above this price the solver **stops heating/cooling production** entirely (0 or less = disabled). Hours blocked this way are labelled **Stop price** in the calendar view. Useful with very expensive peak tariffs.
-
-### Price Markup (€, ex VAT)
-
-The margin your supplier adds on top of the day-ahead price. Enter it the way it appears on your contract — in **euro per kWh excluding VAT**, not as a percentage or a multiplication factor. It enters every price ODIN plans with, and on the **epexprijzen** source it is also the margin the dutche-tax reconstruction rebuilds your tariff from.
-
-### kWh Penalty (€)
-
-Flat penalty per consumed kWh (e.g. a grid fee). Shifts the solver towards solar and self-consumption. Think of it as a slider between "maximum savings" and "maximum comfort stability":
-
-| Value | Behaviour |
-|-------|-----------|
-| `0.1` | Very aggressive. Large temperature swings. Maximum cost savings. |
-| `0.3` | Recommended for well-insulated or passive houses with UFH. |
-| `0.5` | Balanced. Good starting point for most houses. |
-| `1.0` | Conservative. Pre-heats only when price difference is large. |
-| `2.0` | Minimal optimisation. House stays close to target at all times. |
-
-> **Tip:** Start at `0.5`. Reduce toward `0.3` if your house holds temperature well and you want bigger savings. Increase toward `1.0` if temperature swings feel uncomfortable.
-
-### Spread (€/hour)
-
-The indifference band between near-equal hours. When two ways of spreading the same heat cost within this much of each other, ODIN is told they are equally good and takes the gentler one: instead of one hour at a high flow temperature it prefers two hours at a lower one. A floor of 2 €/h is always kept, so raising the value only ever makes the plan flatter; leave it empty for that floor. Raise it when the plan looks too peaky for your taste, lower it when you want every last cent of the price curve used.
+*Only shown when Price Source is set to Manual.* The uploaded manual prices become a **permanent daily pattern**: enter them once (e.g. a fixed day/night tariff) and they repeat every day — no daily re-upload. The first 24 uploaded values define the pattern. Leave off to treat each push as a one-off day (+ tomorrow padding).
 
 ---
 
