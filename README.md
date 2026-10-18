@@ -1,13 +1,17 @@
+[![ODIN Manual](https://img.shields.io/badge/Getting_Started-ODIN_Manual-2EA44F?style=for-the-badge&logo=readthedocs&logoColor=white)](manuals/odin-2/README.md)
+
 # ODIN — Heat Pump Cost Optimizer
 
 ODIN decides **when** your heat pump runs. It optimizes the upcoming hours against your actual electricity prices and solar (PV) forecast, keeps your home comfortably within your target temperature range, and learns the thermal physics of your building — heat loss, COP, thermal time constant, and tank standing loss — directly from the heat pump's own sensors rather than relying on generic factory tables.
 
+![dashboard](docs/img/dashboard-planning.png)
+
 Everything runs locally on the device. There is no cloud account, no subscription, and no data leaving your local network. ODIN only *pulls* day-ahead energy prices and weather forecasts — both of which you can also push from your own home automation system instead. Calculating an optimal schedule takes a fraction of a second and runs once an hour, producing a transparent, hour-by-hour plan that explains why it decided to heat or hold off.
+
 
 [![Order ODIN via Stripe](https://img.shields.io/badge/Order_ODIN_(€199_incl._VAT)-Buy_via_Stripe_Checkout-635BFF?style=for-the-badge&logo=stripe&logoColor=white)](https://buy.stripe.com/6oU6oI2OVeQX7BBgJc4AU03)
 [![Product Page & Calculator](https://img.shields.io/badge/Product_Page-Savings_Calculator-007EC6?style=for-the-badge&logo=githubpages&logoColor=white)](https://gekkekoe.github.io/heatpump-optimizer/)
 
-![dashboard](docs/img/dashboard-planning.png)
 
 ---
 
