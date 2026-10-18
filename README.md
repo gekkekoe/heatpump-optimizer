@@ -36,7 +36,7 @@ Building a reliable, self-learning MPC solver that handles real-world building p
 | **NIBE** | Modbus TCP | Native Modbus TCP (S-Series / SMO) | ODIN 2.0 | 🧪 Beta |
 | **Luxtronik** *(Alpha Innotec / Novelan)* | Modbus TCP | Native Modbus TCP | ODIN 2.0 | 🧪 Beta |
 
-> 💡 **Is your heat pump not listed?** If your heat pump can be read and controlled locally via MQTT or Modbus TCP, we can likely add support for it! Feel free to reach out via [Discussions](https://github.com/gekkekoe/esphome-ecodan-hp/discussions) to request integration for your specific model.
+> 💡 **Is your heat pump not listed?** If your heat pump can be read and controlled locally via MQTT or Modbus TCP, we can likely add support for it! Feel free to reach out via [Discussions](https://github.com/gekkekoe/heatpump-optimizer/discussions) to request integration for your specific model.
 
 ## Which manual & hardware do you need?
 
@@ -82,4 +82,4 @@ ODIN is provided strictly for **private residential use**. Commercial use or res
 
 ## Questions & Support
 
-Have a question or need help with your setup? Head over to the [Discussions tab](https://github.com/gekkekoe/esphome-ecodan-hp/discussions) on the heat pump bridge repository. That is where the community troubleshoots installations — from verifying initial telemetry to debugging specific heat pump dialects.
+Have a question or need help with your setup? Head over to the [Discussions tab](https://github.com/gekkekoe/heatpump-optimizer/discussions) of this repository. That is where the community troubleshoots installations — from verifying initial telemetry to debugging specific heat pump dialects.
