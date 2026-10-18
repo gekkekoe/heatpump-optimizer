@@ -53,6 +53,7 @@ While ODIN is highly advanced, it is important to set the right expectations reg
 
 - **External API Dependency:** For fully automatic operation, ODIN relies on third-party servers for weather forecasts (e.g., Open-Meteo) and electricity prices (e.g., ENTSO-E). While multiple sources are supported, these external services can change their data structures, experience downtime, or alter their free tiers outside of our control. *Mitigation:* ODIN features built-in manual API endpoints (see [Section 20](#20-api-data-feeds--pushing-prices--weather)). You can push your own data locally (e.g., via Home Assistant), ensuring ODIN will always work regardless of what happens to the public APIs.
 - **Solar Forecast Inaccuracy:** Solar production is calculated using weather predictions, which cannot be 100% accurate. Passing clouds, unexpected haze, or partial panel shading can cause the actual yield to be lower than the forecast. *Mitigation:* Use the **Solar Min. Ratio** parameter (see [Section 9](#solar-min-ratio)) to demand a larger share of sun coverage in an hour before ODIN is willing to treat that hour as free solar.
+- **Fixed Value for Your Own PV:** the plan prices self-consumed solar at **25 % of the tariff** — one figure the firmware carries, not a feed-in tariff you enter. It is what decides how far sun can pull an hour's effective price down, and therefore whether an expensive hour still clears the **Stop Price** ceiling ([Section 9](#stop-price-kwh)). A different export rate on your contract is unknown to ODIN: it never plans around selling.
 - **Human Factors & Unpredictable Heat Gains:** The solver learns your house's thermal behavior over time, but it cannot predict human actions. Opening windows for an hour, lighting a fireplace, cooking a large meal, or hosting a party will alter the room temperature in ways the model could not anticipate. ODIN will notice the deviation and adjust the plan for the *next* hour.
 - **Hardware Overrides:** ODIN optimizes the schedule, but it cannot override the heat pump's physical safety limits or hard-coded triggers. For instance, if someone takes a very long shower and the DHW tank temperature hits the physical drop point, the heat pump will start immediately to recover the DHW tank, regardless of ODIN's cost plan.
 - **Telemetry Source:** All measured data (temperatures, energy counters, operation mode) arrives over the connection you configured — from the pump-side device over MQTT, or straight from the pump's Modbus registers. If that source goes offline or its telemetry goes stale (see **Telemetry Stale Timeout**), ODIN excludes the heat pump from the plan and keeps the last plan in effect.
@@ -161,7 +162,7 @@ Toggle **I have solar panels** on if you have a PV installation. Define one card
 Under **Solar Behavior**:
 
 - **Solar-Only Cooling** — only run cooling mode when solar covers the load.
-- **Min Solar Coverage for HP (%)** — percentage of the HP load that must come from solar before the solver may import cheap grid power (0 = off).
+- **Min Solar Coverage for HP (%)** — how much of the HP load must come from solar before the solver may import cheap grid power, as a percentage (0 = off). The Settings field holds the same number as a fraction, so `50` here is `0.50` under Settings → Solver Tuning ([Section 9](#solar-min-ratio)).
 
 If you have no solar panels, leave the toggle off. ODIN will still optimize around price. Please be advised that solar production is an **estimation** based on the parameters.
 
@@ -218,13 +219,15 @@ The header strip keeps the pump in view at all times: **HP** (Online, Stale, or 
 
 On the **Settings** tab a **search box** filters every field by its own name or by the group it sits in, the card list beside it jumps to a card, and you can still **drag the cards to reorder** them or collapse any card with its header. Each card ends with its own save button — **Apply Heat Pump**, **Apply Location**, **Apply Price**, **Apply DHW**, **Apply Solar**, **Apply MQTT** — and the **Solver Tuning** card adds four more, one per group: **Apply Price Rules**, **Apply Mixing Tank**, **Apply Solar Rules** and **Apply Battery**. A field's value only reaches the device when the button governing it is pressed; the two schedule tables are the exception and save through **Compile & Send** and **Compile & Send Limits**.
 
+On a wide screen every tab shares one content width — the width the Settings cards use — and the **Monitoring** tab lays its cards out **three across**, so the live cards, the charts and the calendar read as one band instead of a single scrolling rail. On a phone the same cards stack one per row, and a setting row keeps its label next to the selector instead of losing it to the control.
+
 ---
 
 ## 7. Settings — Connection
 
-![MQTT settings](img/settings-card-conn.png)
+![Connection settings](img/settings-card-conn.png)
 
-The **Connection** card is where ODIN is told how to reach the heat pump at all, and in which language. Everything on this card takes effect after a reboot (**System** tab).
+One card carries all of it, in three groups. **Embedded Broker** decides whether ODIN hosts the broker itself or talks to one elsewhere on your network. **Pump Link** picks *how* ODIN reaches the heat pump — which MQTT dialect, or a Modbus TCP connection — and shows the address fields that choice needs. **MQTT Broker** holds the broker's address and credentials. Everything on this card takes effect at the next reboot (**System** tab).
 
 ### Connection Type
 
@@ -365,7 +368,11 @@ The threshold also sets where the **overheat exploit guard** switches on. At neg
 
 #### Stop Price (€/kWh)
 
-Above this price the solver **stops heating/cooling production** entirely (0 or less = disabled). Hours blocked this way are labelled **Stop price** in the calendar view. Useful with very expensive peak tariffs.
+The ceiling on what the pump's own electricity is allowed to cost. The solver blocks production in an hour whose **effective price for the pump** sits at or above this number (0 or less = disabled). Hours blocked this way are labelled **Stop price** in the calendar view. Useful with very expensive peak tariffs.
+
+The effective price is the tariff with your own solar taken off it: the share of the hour's draw your array covers lowers the hour, counted at **25 % of the tariff** — the value the plan puts on self-consumed PV, carried by the firmware and not a field you can set. Sun can therefore pay an hour under the ceiling rather than the ceiling ignoring the sun: at `0.37` €/kWh with 45 % of the draw covered, the hour prices at 0.37 × (1 − 0.45 × 0.75) = **0.245** €/kWh and heats under a `0.30` ceiling.
+
+Two things this ceiling deliberately leaves alone: the twilight surcharge the plan adds to the shoulder hours for smoothing (that stays in the cost, where nudges belong), and any fixed free quantity of kilowatt-hours — an hour with no sun in it is priced at exactly its tariff.
 
 #### kWh Penalty (€)
 
@@ -439,6 +446,8 @@ How much of the heat pump's electricity in an hour must be covered by your own s
 | `1.00` | Solar must cover the hour completely before the low penalty applies. |
 
 **`1.00` is the top of this field.** The solver works with the same fraction — a demand of 1.0 asks for the whole hour to be sun-powered — and the input stops there, so the buffer against a too-optimistic forecast is bought by asking for **full** coverage rather than by going above it. If the forecast keeps overshooting real production, the ratio is the wrong lever: check **Capacity (kWp)** and **Efficiency (PR)** of the array in [Section 14](#14-settings--solar) first.
+
+Where that coverage reaches beyond this field: an hour your array covers enough is cheaper in effective euro terms, and that discounted price is what the **Stop Price** ceiling is weighed against — so **Solar Min. Ratio** decides when sun makes an hour attractive, while the coverage itself decides whether an expensive hour may run at all ([Stop Price](#stop-price-kwh)).
 
 #### Cool Only From Solar
 
@@ -702,6 +711,8 @@ If the DHW temperature drops below `(Target − Drop) + Threshold`, ODIN schedul
 
 The method used when ODIN schedules DHW. `Regular` uses the pump's ECO mode; `Forced` is faster but comes at the cost of higher consumption.
 
+A tank the pump is already heating is not planned a second time. When the pump reports it is in hot-water mode, ODIN counts that hour as spent and schedules no new cycle over it — which is what keeps a reboot in the middle of a cycle from starting a second one on top of the running one.
+
 ### Legionella Planning
 
 Legionella prevention can be handled in three ways:
@@ -735,7 +746,7 @@ One card per physical array (roof row / direction). The device computes the kWp-
 
 | Field | Description |
 |-------|-------------|
-| **Capacity (kWp)** | Peak output of the array. During hours when your panels produce more than the heat pump needs, the effective electricity cost drops to near zero — ODIN prefers to run then. |
+| **Capacity (kWp)** | Peak output of the array. During hours when your panels produce more than the heat pump needs, the effective electricity cost drops to near zero — ODIN prefers to run then, and that discount is also what can pull an expensive hour back under the **Stop Price** ceiling ([Section 9](#stop-price-kwh)). |
 | **Orientation (Degrees)** | 0 = North, 90 = East, 180 = South, 270 = West. South gives the highest midday output; east/west shift output to morning/afternoon. |
 | **Tilt / Pitch (Degrees)** | Flat / low-slope roof: 10–15°. Standard pitched roof: 30–45°. Optimal for NL/BE latitude: ~35°. |
 | **Efficiency (PR)** | Performance ratio — inverter efficiency, cable losses, soiling, temperature derating. String inverter ≈ 0.82, micro-inverter ≈ 0.85, central ≈ 0.78–0.80. Default `0.82`. |
@@ -772,7 +783,7 @@ Above the charts sits the **Time View** picker: **Live** (the cards and charts o
 
 These values are learned automatically from your heat pump's real measured data of the last heating/cooling session and are used by the solver to model your house. Two buttons at the top, **Heating Profile** and **Cooling Profile**, choose which of the two models you are looking at. You can override any value manually — ODIN uses your overridden values until the next automatic daily update.
 
-The card is split into collapsible sub-cards: **Season Profile** (the heating figures, the cooling figures, and a **Zone 2** block inside each group on a two-zone install), **Universal Building Physics** (the numbers that are not season-specific — daily swing, time constant, passive solar), **Overrides**, and **DHW — Domestic Hot Water**; **Apply Physics Data** writes them all back in one go.
+The card holds two collapsible sub-cards: **Season Profile** (the heating figures, the cooling figures, and a **Zone 2** block inside each group on a two-zone install) and **Universal Building Physics** (the numbers that are not season-specific — daily swing, time constant, passive solar). **Apply Physics Data** writes them back in one go. The card below it, **Misc**, carries the two blocks that are not house physics at all — **Overrides** and **DHW — Domestic Hot Water** — saved together by their own **Apply Overrides & DHW** button. The rows of all four are listed below.
 
 | Field | Description |
 |-------|-------------|
@@ -786,7 +797,7 @@ The card is split into collapsible sub-cards: **Season Profile** (the heating fi
 | **Passive Solar Factor** | kWh per W/m² irradiance — heat entering through windows from sunlight, independent of your PV panels. Learned automatically inside a hard 0.002–0.030 envelope, starting from a conservative default of 0.005; the house-type table below says what each range means. |
 | **DHW block** | The hot-water figures as the solver sees them: the live tank temperature, **Target** and **Max Drop** — both read from the pump, which owns that pair, not from your settings — the **Start Threshold** you set under Settings → DHW, and the tank volume. |
 | **Learned Tank Loss (1/h)** | How strongly your tank's cooling tracks the surrounding temperature, learned from measured tank drift between heating cycles; correct it by hand if you know better. **Est. Loss Now** translates it to °C/h at the current temperatures — the rate the DHW trigger timing uses. Until enough cooling intervals have been observed, ODIN falls back to a generic 0.5 °C/h. |
-| **Overrides** | Its own sub-card. **Room Temperature Override** (per zone) forces the room target the solver must hold: `0` leaves the schedule in charge, anything between 5 and 40 °C takes over. **Discharge Override** (per zone) forces discharge on top of whatever the pump itself asks for — and while it is on, that zone stops learning its time constant and passive-solar figures, because a forced discharge is not a measurement of your house. |
+| **Overrides** | A sub-card of **Misc**, not of this card. **Room Temperature Override** (per zone) forces the room target the solver must hold: `0` leaves the schedule in charge, anything between 5 and 40 °C takes over. **Discharge Override** (per zone) forces discharge on top of whatever the pump itself asks for — and while it is on, that zone stops learning its time constant and passive-solar figures, because a forced discharge is not a measurement of your house. |
 
 **Typical values** (for sanity-checking what ODIN learned):
 
@@ -848,7 +859,7 @@ Switch the **Time View** to **Calendar** and open any hour to see *why* the solv
 | **Energy price** | No other factor dominated — simply the cheapest hour to buy the kWh needed. |
 | **Hot water** | Hour reserved for a domestic hot water (DHW) heating cycle. |
 | **Legionella** | Hour reserved for the legionella cycle (ODIN-planned slot or the pump's own system-cycle window). |
-| **Stop price** | Blocked: the price was at or above your **Stop Price** setting, so grid use was forbidden this hour. |
+| **Stop price** | Blocked: the hour's **effective** price for the pump — the tariff after your own PV is credited, at 25 % of the tariff — sat at or above your **Stop Price** setting, so grid use was forbidden this hour. An hour the sun covers enough is not blocked, even on an expensive tariff. |
 | **Solar-only** | Blocked: **Cool Only From Solar** is enabled and there wasn't enough sun. |
 | **Power limit** | Blocked: your configured **energy constraint** (Consumption / Output Cap) left no room this hour. |
 
