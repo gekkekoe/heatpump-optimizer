@@ -67,7 +67,6 @@ Building a reliable, self-learning MPC solver that handles real-world building p
 |------|----------|
 | [`manuals/odin-2/`](manuals/odin-2) | Current manual and screenshots for the ODIN 2.0 device. |
 | [`manuals/odin-1/`](manuals/odin-1) | Legacy manual for the ODIN 1.0 device and Asgard integration. |
-| [`docs/`](docs) | Source files for the product website hosted on GitHub Pages. |
 | [`automations/`](automations) | Home Assistant blueprint that forwards HA sensor data (battery SoC, room temperature overrides, discharge limits) to ODIN via its REST API. |
 
 The REST and MQTT APIs are fully documented in sections 20 and 21 of the [ODIN 2.0 manual](manuals/odin-2/README.md). Use these endpoints to integrate the Home Assistant blueprint, forward external room sensors, or push your own custom price feeds.
