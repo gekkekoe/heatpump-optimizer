@@ -33,12 +33,12 @@ Building a reliable, self-learning MPC solver that handles real-world building p
 |---|---|---|---|---|
 | **Mitsubishi Ecodan / Zubadan** | MQTT | [Asgard](https://github.com/gekkekoe/esphome-ecodan-hp/tree/main/asgard) (Virtual Thermostats) | ODIN 2.0 | ✅ Supported |
 | **Panasonic Aquarea** | MQTT | HeishaMon | ODIN 2.0 |  ✅  Supported |
-| **Adlar Castra** *(Aurora II)* | Modbus TCP | Native / RS485-to-TCP gateway | ODIN 2.0 | 🧪 Beta |
-| **Daikin Altherma** | MQTT | ESPAltherma / P1P2MQTT | ODIN 2.0 | 🧪 Beta |
-| **Daikin Altherma** | Modbus TCP | Daikin DCOM / HomeHub | ODIN 2.0 | 🧪 Beta |
-| **Vaillant aroTHERM** | MQTT | ebusd (eBUS) | ODIN 2.0 | 🧪 Beta |
-| **NIBE** | Modbus TCP | Native Modbus TCP (S-Series / SMO) | ODIN 2.0 | 🧪 Beta |
-| **Luxtronik** *(Alpha Innotec / Novelan)* | Modbus TCP | Native Modbus TCP | ODIN 2.0 | 🧪 Beta |
+| **Adlar Castra** *(Aurora II)* | Modbus TCP | Native / RS485-to-TCP gateway | ODIN 2.0 | 🧪 [Beta](https://github.com/gekkekoe/heatpump-optimizer/discussions/27) |
+| **Daikin Altherma** | MQTT | ESPAltherma / P1P2MQTT | ODIN 2.0 | 🧪 [Beta](https://github.com/gekkekoe/heatpump-optimizer/discussions/27) |
+| **Daikin Altherma** | Modbus TCP | Daikin DCOM / HomeHub | ODIN 2.0 | 🧪 [Beta](https://github.com/gekkekoe/heatpump-optimizer/discussions/27) |
+| **Vaillant aroTHERM** | MQTT | ebusd (eBUS) | ODIN 2.0 | 🧪 [Beta](https://github.com/gekkekoe/heatpump-optimizer/discussions/27) |
+| **NIBE** | Modbus TCP | Native Modbus TCP (S-Series / SMO) | ODIN 2.0 | 🧪 [Beta](https://github.com/gekkekoe/heatpump-optimizer/discussions/27) |
+| **Luxtronik** *(Alpha Innotec / Novelan)* | Modbus TCP | Native Modbus TCP | ODIN 2.0 | 🧪 [Beta](https://github.com/gekkekoe/heatpump-optimizer/discussions/27) |
 
 > 💡 **Is your heat pump not listed?** If your heat pump can be read and controlled locally via MQTT or Modbus TCP, we can likely add support for it! Feel free to reach out via [Discussions](https://github.com/gekkekoe/heatpump-optimizer/discussions) to request integration for your specific model.
 
