@@ -165,6 +165,10 @@ action:
       value: >-
         {{ (bool_value | int(0)) if is_discharge_field
            else (states(source) | float(-99999)) }}
+      # time stamp is needed for aging/stale detection
+      ts: >-
+        {{ (as_timestamp(states[source].last_changed) | round(0) | int)
+           if is_room_field else 0 }}
 
   - service: rest_command.odin_get
     response_variable: odin_resp
@@ -191,6 +195,7 @@ action:
       host: "{{ host }}"
       key: "{{ field }}"
       value: "{{ value }}"
+      ts: "{{ ts }}"
 
 mode: single
 max_exceeded: silent

@@ -16,7 +16,12 @@ rest_command:
   odin_set:
     url: "http://{{ host }}/dashboard/set"
     method: POST
-    payload: '{"key": "{{ key }}", "value": {{ value }}}'
+    payload: >-
+      {%- if ts is defined and ts | int(0) > 0 %}
+      {"key": "{{ key }}", "value": {{ value }}, "ts": {{ ts | int }}}
+      {%- else %}
+      {"key": "{{ key }}", "value": {{ value }}}
+      {%- endif %}
     content_type: "application/json"
 ```
 
@@ -24,6 +29,11 @@ Without these two commands the automation fails with
 `Service rest_command.odin_set not called`. Editing the file needs a Home Assistant
 restart to take effect; the `rest_command.reload` action also picks them up, the
 plain "Reload YAML" button does not.
+
+The `ts` member is optional and only the two room fields send it: it is the time the
+source took its reading, and it is what tells ODIN that this number is a measurement
+from a sensor rather than a value somebody typed into the Overrides box. Everything
+else — a plain `{"key", "value"}` write, and any other field — is unchanged.
 
 ### How does this work?
 1. Ensure your Home Assistant instance is running and the two commands above are loaded.
@@ -51,15 +61,19 @@ one pushes on a change of its source **and once when Home Assistant starts up**,
 restart of Home Assistant — or an ODIN that was reflashed or reset while Home
 Assistant was down — is caught up without waiting for the sensor to move. A push that
 would change nothing is skipped.
-The **Room Temperature Override** is for an ODIN that has no room sensor of its
-own, or one that reads the boiler room instead of the living room: the number
-replaces the pump's own room reading wherever the ODIN plans, controls or records the
-room — the history graph included — and the dashboard says which of the two is in use.
-Only the building-physics learner leaves the number alone: a typed temperature cannot
-measure how fast the house cools. A reading between 0 and 5 °C is not forwarded (the
+The **Room Temperature Override** is the room temperature of that zone, from the
+same channel as a Bluetooth sensor or the pump's own reading: the number replaces
+whatever the pump reports for its boiler room wherever the ODIN plans, controls or
+records the room — the history graph included — and the row under the box says which
+input is in use and how old its last fix was. Because this blueprint also sends the
+time its sensor took the reading, ODIN treats the pushed value as a measurement: it
+ages like any sensor (the row then says it is holding the last fix), and the physics
+learners may use it. A number you type into the box yourself has no such time, so it
+never goes stale — and nothing is learned from it, because a typed temperature cannot
+measure how fast a house cools. A reading between 0 and 5 °C is not forwarded (the
 ODIN refuses that gap: it is the difference between "override off" and "a heated
-room"); set the field back to 0 in the ODIN dashboard to hand control back to the
-sensor.
+room"); set the field back to 0 in the ODIN dashboard to hand the zone back to
+whatever is left.
 The **Discharge Override** switch tells the ODIN that heat is leaving the store into a
 zone's loop while the pump's own zone-pump report says nothing is moving — an emitter
 loop driven from outside the pump. It is a switch on the ODIN, so the source is read as

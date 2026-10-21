@@ -38,7 +38,7 @@ ODIN 2.0 is the standalone optimizer. It talks to your heat pump **directly over
 
 - **ODIN hardware**
 - **A way to reach the heat pump**: either a pump-side device that speaks MQTT (**Asgard** or **HeishaMon**, or one of the other dialects ODIN understands — see [Section 7](#7-settings--connection)), or a pump or gateway with a **Modbus TCP** port ODIN can dial directly. An MQTT device must be connected to the **same MQTT broker** ODIN uses, or be reachable through the **HP Command URL** HTTP fallback.
-- A representative **room temperature source**. ODIN plans against the actual measured room temperature.
+- A representative **room temperature source**. ODIN plans against the real room temperature, and each zone has one channel for it: the heat pump's own room sensor, a Bluetooth room thermometer mapped under System → Bluetooth, a value pushed over the API, or a number you type under Monitoring → Overrides all feed that one channel (see [Section 15](#15-monitoring--optimization-physics--charts) and [Section 17](#17-system-tab)).
 - A browser to complete initial setup
 - Your location coordinates (latitude / longitude) — the setup wizard has an interactive map
 - Basic knowledge of your house: heating system type, solar panel capacity (if any), heat pump rated output
@@ -570,7 +570,7 @@ If your zone is not listed, choose the closest market zone or use **Fixed** pric
 |--------|-------|
 | **Open-Meteo (default)** | Free, no account or key needed. Good accuracy across Europe. Uses server-side tilted-plane irradiance (POA) calculation — more accurate than post-processing for non-south orientations. An optional API key raises the rate limit. |
 | **Visual Crossing** | Alternative provider. Requires a free API key from [visualcrossing.com](https://www.visualcrossing.com). Falls back to Open-Meteo on failure. |
-| **Manual** | No external fetch — temperature and solar irradiance are pushed to ODIN via `POST /api/data/weather`. See [Section 20](#20-api-data-feeds--pushing-prices--weather). |
+| **Manual** | No external fetch — temperature, solar irradiance and (optionally) relative humidity are pushed to ODIN via `POST /api/data/weather`. See [Section 20](#20-api-data-feeds--pushing-prices--weather). |
 
 ### Weather API Keys
 
@@ -797,7 +797,7 @@ The card holds two collapsible sub-cards: **Season Profile** (the heating figure
 | **Passive Solar Factor** | kWh per W/m² irradiance — heat entering through windows from sunlight, independent of your PV panels. Learned automatically inside a hard 0.002–0.030 envelope, starting from a conservative default of 0.005; the house-type table below says what each range means. |
 | **DHW block** | The hot-water figures as the solver sees them: the live tank temperature, **Target** and **Max Drop** — both read from the pump, which owns that pair, not from your settings — the **Start Threshold** you set under Settings → DHW, and the tank volume. |
 | **Learned Tank Loss (1/h)** | How strongly your tank's cooling tracks the surrounding temperature, learned from measured tank drift between heating cycles; correct it by hand if you know better. **Est. Loss Now** translates it to °C/h at the current temperatures — the rate the DHW trigger timing uses. Until enough cooling intervals have been observed, ODIN falls back to a generic 0.5 °C/h. |
-| **Overrides** | A sub-card of **Misc**, not of this card. **Room Temperature Override** (per zone) forces the room target the solver must hold: `0` leaves the schedule in charge, anything between 5 and 40 °C takes over. **Discharge Override** (per zone) forces discharge on top of whatever the pump itself asks for — and while it is on, that zone stops learning its time constant and passive-solar figures, because a forced discharge is not a measurement of your house. |
+| **Overrides** | A sub-card of **Misc**, not of this card. **Room Temperature Override** (per zone) is that zone's room temperature, and every source shares one channel with it: a Bluetooth sensor mapped under System → Bluetooth, or a value pushed over the API together with its measurement time. **Discharge Override** (per zone) forces discharge on top of whatever the pump itself asks for — and while it is on, that zone stops learning its time constant and passive-solar figures, because a forced discharge is not a measurement of your house. |
 
 **Typical values** (for sanity-checking what ODIN learned):
 
@@ -917,6 +917,7 @@ ODIN fetches automatically as well: the first attempt for tomorrow's day-ahead p
 |---------|-------------|
 | **System Info** | Uptime, free heap (PSRAM / RAM), solve runs, last solve duration, firmware version and IP. |
 | **Wi-Fi** | Enter your network's SSID and password and click **Save & Reboot** to connect. With no credentials the device runs as AP `Odin_Setup`. Hold the **BOOT** button for 5 s to erase the Wi-Fi settings. |
+| **Bluetooth** | Room thermometers that announce their reading over Bluetooth. **On** makes ODIN listen to those announcements — it never pairs with, connects to, writes to or wakes a sensor. **Scan 20 s** opens a wide listening window and lists every sensor heard with its name, MAC, temperature, battery, signal level and how fresh its last beacon was; the dropdown on a row maps that sensor to **Zone 1** (and **Zone 2** on a two-zone install). A mapped sensor becomes that zone's room temperature — the plan, the flow control and the history graph all read it instead of the heat pump's own reading. ODIN listens for [BTHome](https://bthome.io) advertisements (v1 and v2); encrypted broadcasts and Xiaomi/Mijia thermometers on factory firmware are listed but unreadable — flash them with BTHome first. |
 | **Settings Backup** | **Save Settings** writes every Settings/Solver value (numbers, switches, sliders, selects) to a JSON file; **Restore Settings** loads such a file back onto the device. |
 | **Data Backup** | Restores a data backup made on an Asgard/ECODAN pump (System → Data Backup → Backup History / Backup Physics): **Restore History** replaces this heat pump's hourly archive, **Restore Physics** seeds the learned model values — useful when migrating from Asgard to ODIN. |
 | **Firmware** | **Check for Update** asks GitHub for the newest release. When one exists, a banner appears with the version and its release notes and **Download** flashes it — nothing is flashed before you press that button. A test build is offered as **Download pre-release**, carries a **PRE-RELEASE** badge and says so in its own warning; the same badge sits next to the firmware version when the device itself runs a pre-release. **Manual Firmware Upload** flashes a `.bin` you downloaded from the releases page yourself (upload takes 20–60 s). **Reboot Device** restarts ODIN. ⚠️ **Do not power off the device during an update.** |
@@ -1150,6 +1151,7 @@ Pushes 24–48 hours of hourly outdoor temperature and solar irradiance to ODIN.
 | `temps` | array of floats | Yes | Hourly outdoor air temperature in **°C**, starting from hour 0 of today. Minimum 24 values; 48 recommended. |
 | `solar` | array of floats | Yes | Hourly solar irradiance in **W/m²**, plane-of-array (POA) — already corrected for your panel tilt and orientation. Minimum 24 values; 48 recommended. Negative values are clamped to 0. |
 | `wind` | array of floats | No | Hourly wind speed in m/s (used for the wind COP correction). Missing hours default to a calm 2.0 m/s. |
+| `humidity` | array of floats | No | Hourly forecast relative humidity in **%**, indexed exactly like `temps` (value 0 is hour 0 of today). Only 1–100 is stored. It is read by [Frost Planning](#frost-planning): outdoor temperature and humidity together decide which hours ODIN expects the pump to defrost in. Optional — see the rules below for what an omitted or short array does. |
 
 **Rules:**
 
@@ -1158,6 +1160,11 @@ Pushes 24–48 hours of hourly outdoor temperature and solar irradiance to ODIN.
 - Solar values are irradiance in **W/m²**, not production in kWh. ODIN multiplies by your configured array capacity and PR to derive expected hourly production.
 - If you are supplying data from a local weather station that measures horizontal (GHI) irradiance rather than tilted-plane (POA), you will need to transpose it yourself before pushing — or use the Open-Meteo automatic source which performs this server-side.
 - Data is written to flash immediately and survives a reboot.
+- `humidity` is optional, and a shorter array is allowed: its values line up with `temps` hour by hour, and the hours the array does not reach stay **unknown** instead of being padded.
+- Entries outside **1–100 %** are refused hour by hour — that hour reads unknown, it is never clamped to 100.
+- A POST **without** a `humidity` key clears the stored humidity window rather than keeping what an earlier push supplied. That is deliberate: not sending it says this feed knows nothing about humidity, and the frost model must not keep steering on numbers nobody forecast. The `temps` and `solar` of the same push are stored as usual.
+- With no humidity stored at all, Frost Planning finds no hour that can frost — an unknown hour is not counted as a mild one either — so the plan is priced as if the compressor never defrosts, the same result as leaving the switch off.
+- Both feeds can be checked on the device itself with `GET /api/env_data`, documented under [Reading back what ODIN holds](#get-apienv_data--reading-back-what-odin-holds).
 
 **Success response:** `{ "success": true }`
 
@@ -1170,8 +1177,11 @@ rest_command:
     method: POST
     content_type: "application/json"
     payload: >
-      {"temps": {{ temps_list | tojson }}, "solar": {{ solar_list | tojson }}}
+      {"temps": {{ temps_list | tojson }}, "solar": {{ solar_list | tojson }}, "humidity": {{ rh_list | tojson }}}
 ```
+
+`rh_list` is 48 hourly relative-humidity values in %. Leave the `humidity` key out entirely if your feed has no humidity forecast — but note that a push without it clears the humidity window, see the rules above.
+
 
 ### Error responses
 
