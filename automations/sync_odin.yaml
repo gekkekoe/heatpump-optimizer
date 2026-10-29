@@ -13,12 +13,13 @@ blueprint:
 
 
     Only valid readings are forwarded: what arrives has to be something the chosen
-    field accepts, and it is written only when it differs from what the ODIN
-    currently holds by more than 0.05. The device stores numbers in single
+    field accepts, and a number is written when it differs from what the ODIN
+    currently holds by more than 0.05 — the device stores numbers in single
     precision, so comparing for exact equality would rewrite the same number on
-    every sensor update and wear at the flash. The discharge fields are a switch
-    on the ODIN, so their value is 1 or 0 and any change at all is written. A
-    source that is `unavailable` or `unknown` is never forwarded.
+    every sensor update. The discharge fields are a switch on the ODIN, so their
+    value is 1 or 0 and any change at all is written. A source that is
+    `unavailable` or `unknown` is never forwarded.
+
 
 
     Accepted bands: battery SOC 0..2000 kWh, discharge limit 0..100 kW, room
@@ -50,13 +51,24 @@ blueprint:
 
 
     Needs two RESTful commands in configuration.yaml first - `odin_get` and
-    `odin_set`, 
+    `odin_set` (the `ts` in the payload carries the arrival moment of a room
+    temperature; leave it out and the ODIN stamps the write itself):
+
+        rest_command:
+          odin_get:
+            url: "http://{{ host }}/dashboard/state"
+            method: GET
+          odin_set:
+            url: "http://{{ host }}/dashboard/set"
+            method: POST
+            payload: '{"key": "{{ key }}", "value": {{ value }}, "ts": {{ ts }}}'
+            content_type: "application/json"
 
     A Home Assistant restart re-syncs: the automation also triggers on Home
     Assistant start and pushes the source's current value once it is known again,
     so an ODIN that was reflashed or reset while Home Assistant was down is caught
-    up without waiting for the sensor to move. Nothing is written when the two
-    already agree.
+    up without waiting for the sensor to move. The battery and discharge fields
+    are left alone when the two already agree.
   domain: automation
   input:
     source_entity:
@@ -141,6 +153,11 @@ trigger:
   - platform: homeassistant
     event: start
 
+  # A steady sensor never fires the state trigger, and ODIN counts a room
+  # number as a measurement for an hour after it arrives: beat every 5 minutes.
+  - platform: time_pattern
+    minutes: "/5"
+
 condition:
   - condition: template
     value_template: >-
@@ -165,9 +182,10 @@ action:
       value: >-
         {{ (bool_value | int(0)) if is_discharge_field
            else (states(source) | float(-99999)) }}
-      # time stamp is needed for aging/stale detection
+      # The arrival of the reading, not of its last change: a heartbeat that
+      # repeats a steady value has to move the stamp or ODIN keeps aging it.
       ts: >-
-        {{ (as_timestamp(states[source].last_changed) | round(0) | int)
+        {{ (as_timestamp(states[source].last_updated) | round(0) | int)
            if is_room_field else 0 }}
 
   - service: rest_command.odin_get
@@ -185,12 +203,16 @@ action:
         {% if is_discharge_field %}
           {% set held = body.get(field, false) %}
           {{ (1 if (held is sameas true or held == 1) else 0) != (1 if v > 0.5 else 0) }}
+        {# A room number is re-stamped even when it agrees; the rest on change only. #}
+        {% elif is_room_field %}
+          {{ true }}
         {% else %}
           {{ (v - (body.get(field, -99999) | float(-99999))) | abs > 0.05 }}
         {% endif %}
       {% else %}{{ true }}{% endif %}
 
   - service: rest_command.odin_set
+    continue_on_error: true
     data:
       host: "{{ host }}"
       key: "{{ field }}"
