@@ -30,10 +30,10 @@ Without these two commands the automation fails with
 restart to take effect; the `rest_command.reload` action also picks them up, the
 plain "Reload YAML" button does not.
 
-The `ts` member is optional and only the two room fields send it: it is the time the
-source took its reading, and it is what tells ODIN that this number is a measurement
-from a sensor rather than a value somebody typed into the Overrides box. Everything
-else — a plain `{"key", "value"}` write, and any other field — is unchanged.
+The `ts` member is optional and this blueprint never sends it: ODIN stamps each write with
+its own arrival, and that stamp is what makes a pushed room number a measurement — for the
+hour after it. A writer that does send `ts` wins over the arrival time; a room value of `0`
+clears the override together with its stamp.
 
 ### How does this work?
 1. Ensure your Home Assistant instance is running and the two commands above are loaded.
@@ -65,12 +65,10 @@ The **Room Temperature Override** is the room temperature of that zone, from the
 same channel as a Bluetooth sensor or the pump's own reading: the number replaces
 whatever the pump reports for its boiler room wherever the ODIN plans, controls or
 records the room — the history graph included — and the row under the box says which
-input is in use and how old its last fix was. Because this blueprint also sends the
-time its sensor took the reading, ODIN treats the pushed value as a measurement: it
-ages like any sensor (the row then says it is holding the last fix), and the physics
-learners may use it. A number you type into the box yourself has no such time, so it
-never goes stale — and nothing is learned from it, because a typed temperature cannot
-measure how fast a house cools. A reading between 0 and 5 °C is not forwarded (the
+input is in use and how old its last fix was. Every write is stamped with its arrival, so
+ODIN counts the pushed value as a measurement for an hour and the physics learners may use
+it — that is what the five-minute beat is for (one typed number is stamped too, but an hour
+of it cannot teach tau). A reading between 0 and 5 °C is not forwarded (the
 ODIN refuses that gap: it is the difference between "override off" and "a heated
 room"); set the field back to 0 in the ODIN dashboard to hand the zone back to
 whatever is left.

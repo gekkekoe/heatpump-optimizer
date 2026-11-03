@@ -30,11 +30,11 @@ blueprint:
 
 
     A room temperature override replaces the pump's own room reading wherever the
-    ODIN plans, controls or records the room — the history graph included — and only
-    the building-physics learner leaves it alone, because a typed number cannot
-    measure how fast the house cools. Set the field back to 0 in the ODIN dashboard
-    to hand control back to the sensor. The battery is only planned with while
-    battery planning is enabled on the ODIN.
+    ODIN plans, controls or records the room — the history graph included. The
+    building-physics learner uses it while the write is younger than an hour, which is
+    what the five-minute beat below is for. Set the field back to 0 in the ODIN
+    dashboard to hand control back to the sensor. The battery is only planned with
+    while battery planning is enabled on the ODIN.
 
 
     A discharge override is a different kind of input: it is OR'd with what the
@@ -51,8 +51,8 @@ blueprint:
 
 
     Needs two RESTful commands in configuration.yaml first - `odin_get` and
-    `odin_set` (the `ts` in the payload carries the arrival moment of a room
-    temperature; leave it out and the ODIN stamps the write itself):
+    `odin_set`. No `ts` is sent: the ODIN stamps each write with its own arrival
+    moment, which is what makes a pushed room number a measurement the learners use:
 
         rest_command:
           odin_get:
@@ -61,7 +61,12 @@ blueprint:
           odin_set:
             url: "http://{{ host }}/dashboard/set"
             method: POST
-            payload: '{"key": "{{ key }}", "value": {{ value }}, "ts": {{ ts }}}'
+            payload: >-
+              {%- if ts is defined and ts | int(0) > 0 %}
+              {"key": "{{ key }}", "value": {{ value }}, "ts": {{ ts | int }}}
+              {%- else %}
+              {"key": "{{ key }}", "value": {{ value }}}
+              {%- endif %}
             content_type: "application/json"
 
     A Home Assistant restart re-syncs: the automation also triggers on Home
@@ -182,11 +187,9 @@ action:
       value: >-
         {{ (bool_value | int(0)) if is_discharge_field
            else (states(source) | float(-99999)) }}
-      # The arrival of the reading, not of its last change: a heartbeat that
-      # repeats a steady value has to move the stamp or ODIN keeps aging it.
-      ts: >-
-        {{ (as_timestamp(states[source].last_updated) | round(0) | int)
-           if is_room_field else 0 }}
+      # No ts: the ODIN stamps the arrival itself, so a room value that sits steady for
+      # hours still counts as a measurement to the physics learners.
+      ts: 0
 
   - service: rest_command.odin_get
     response_variable: odin_resp
@@ -203,7 +206,7 @@ action:
         {% if is_discharge_field %}
           {% set held = body.get(field, false) %}
           {{ (1 if (held is sameas true or held == 1) else 0) != (1 if v > 0.5 else 0) }}
-        {# A room number is re-stamped even when it agrees; the rest on change only. #}
+        {# A room number is re-sent even when it agrees; the rest on change only. #}
         {% elif is_room_field %}
           {{ true }}
         {% else %}
