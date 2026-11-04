@@ -2,14 +2,15 @@ blueprint:
   name: Sync a Home Assistant Value to ODIN (REST)
   description: >
     Forwards a Home Assistant sensor value to an ODIN device through its REST
-    API, so Home Assistant can feed the solver's numbers without MQTT. Six
+    API, so Home Assistant can feed the solver's numbers without MQTT. Seven
     fields to choose from: the two battery numbers (state of charge in kWh,
     maximum discharge in kW), the room temperature override of zone 1 or zone 2 —
     the temperature the planner uses when the pump has no room sensor of its own
-    (or reads the boiler room instead of the living room) — and the buffer
-    discharge override of zone 1 or zone 2, which tells the ODIN that heat is
-    leaving the store into that zone's loop even though the pump's own zone pump
-    says it stands still.
+    (or reads the boiler room instead of the living room) — the buffer discharge
+    override of zone 1 or zone 2, which tells the ODIN that heat is leaving the
+    store into that zone's loop even though the pump's own zone pump says it
+    stands still, and the electric meter reading, for an install whose heat pump
+    gives no usable consumption figure at all.
 
 
     Only valid readings are forwarded: what arrives has to be something the chosen
@@ -23,18 +24,39 @@ blueprint:
 
 
     Accepted bands: battery SOC 0..2000 kWh, discharge limit 0..100 kW, room
-    temperature override 0 (off) or 5..40 °C. The gap between 0 and 5 is refused
-    on purpose — it is the difference between "override off" and "a room that is
-    being heated" — so a reading inside it (a frosty hallway, a sensor that just
-    came back online) is never forwarded and the ODIN keeps whatever it had.
+    temperature override 0 (off) or 5..40 °C, electric meter 0..1000000 kWh. The
+    gap between 0 and 5 on the room field is refused on purpose — it is the
+    difference between "override off" and "a room that is being heated" — so a
+    reading inside it (a frosty hallway, a sensor that just came back online) is
+    never forwarded and the ODIN keeps whatever it had. The meter has no such gap:
+    0 means off and 0.25 kWh is a meter that was installed this morning.
 
 
     A room temperature override replaces the pump's own room reading wherever the
-    ODIN plans, controls or records the room — the history graph included — and only
-    the building-physics learner leaves it alone, because a typed number cannot
-    measure how fast the house cools. Set the field back to 0 in the ODIN dashboard
-    to hand control back to the sensor. The battery is only planned with while
-    battery planning is enabled on the ODIN.
+    ODIN plans, controls or records the room — the history graph included. The
+    building-physics learner uses it while the write is younger than an hour, which is
+    what the five-minute beat below is for. Set the field back to 0 in the ODIN
+    dashboard to hand control back to the sensor. The battery is only planned with
+    while battery planning is enabled on the ODIN.
+
+
+    The electric meter replaces the pump's own kWh counter for everything the ODIN
+    books: the day totals, the hour rows, the COP the planner learns and the
+    plan-vs-actual columns. Forward the reading of a meter on the heat pump's
+    supply — a P1 port, a smart meter entity, an S0 counter — and an install whose
+    pump reports nothing usable gets a real energy history instead of one
+    integrated from watts. Send whatever the meter reads: a lifetime total or a
+    since-midnight counter, because the ODIN differences consecutive readings and
+    reads a drop as the meter resetting rather than as energy given back, so a
+    counter that zeroes at midnight needs no extra automation. The one reading that
+    is not a reading is exactly `0`: 0 is the off value, so a since-midnight counter
+    reporting `0.000` at midnight switches the override off for that one report and
+    the next non-zero one switches it back — the step itself books nothing, in either
+    direction. The reading is written when it differs from what the ODIN holds by
+    more than 0.05 kWh, and a source that stops reporting simply stops moving the
+    total — nothing expires. Set the field back to 0 in the ODIN dashboard (Physics
+    Data → Consumption) to hand the bookkeeping back to the pump's own counter, which
+    keeps reporting on the same card while it is overridden.
 
 
     A discharge override is a different kind of input: it is OR'd with what the
@@ -51,8 +73,8 @@ blueprint:
 
 
     Needs two RESTful commands in configuration.yaml first - `odin_get` and
-    `odin_set` (the `ts` in the payload carries the arrival moment of a room
-    temperature; leave it out and the ODIN stamps the write itself):
+    `odin_set`. No `ts` is sent: the ODIN stamps each write with its own arrival
+    moment, which is what makes a pushed room number a measurement the learners use:
 
         rest_command:
           odin_get:
@@ -61,14 +83,19 @@ blueprint:
           odin_set:
             url: "http://{{ host }}/dashboard/set"
             method: POST
-            payload: '{"key": "{{ key }}", "value": {{ value }}, "ts": {{ ts }}}'
+            payload: >-
+              {%- if ts is defined and ts | int(0) > 0 %}
+              {"key": "{{ key }}", "value": {{ value }}, "ts": {{ ts | int }}}
+              {%- else %}
+              {"key": "{{ key }}", "value": {{ value }}}
+              {%- endif %}
             content_type: "application/json"
 
     A Home Assistant restart re-syncs: the automation also triggers on Home
     Assistant start and pushes the source's current value once it is known again,
     so an ODIN that was reflashed or reset while Home Assistant was down is caught
-    up without waiting for the sensor to move. The battery and discharge fields
-    are left alone when the two already agree.
+    up without waiting for the sensor to move. The battery, discharge and meter
+    fields are left alone when the two already agree.
   domain: automation
   input:
     source_entity:
@@ -76,9 +103,10 @@ blueprint:
       description: >
         The sensor to forward: a battery energy sensor in kWh (for SOC), a power
         sensor in kW (for the discharge limit), a room temperature sensor in °C
-        (for the room temperature override), or an on/off entity — binary sensor,
+        (for the room temperature override), an on/off entity — binary sensor,
         input boolean, switch — or any numeric sensor (for the discharge
-        override).
+        override), or an energy sensor in kWh (for the electric meter reading:
+        the pump's total, a smart meter's total, anything cumulative).
       selector:
         entity:
           domain:
@@ -100,7 +128,9 @@ blueprint:
         zone's room temperature for planning; 0 turns the override off.
         discharge_override_z1/_z2 asserts a buffer discharge for that zone while
         the source is on (or above the threshold below); off writes 0 and hands
-        the flag back to the pump.
+        the flag back to the pump. consumption_override_kwh replaces the pump's
+        own kWh counter with the forwarded meter reading, for a pump that cannot
+        report its consumption; 0 turns that override off too.
       default: battery_soc_kwh
       selector:
         select:
@@ -112,6 +142,7 @@ blueprint:
             - room_override_z2
             - discharge_override_z1
             - discharge_override_z2
+            - consumption_override_kwh
 
     discharge_threshold:
       name: Discharge Threshold
@@ -142,9 +173,13 @@ variables:
   bool_value: >-
     {{ 1 if is_on_state else 0 if is_off_state
        else (1 if (state_str | float(-99999)) > (threshold | float(0.5)) else 0) }}
+  # The kWh meter shares the plain-range rule; its band is the device's own
+  # (kConsumptionOverrideMax in hp_telemetry.h), so a reading that cannot be a
+  # meter is refused here as well as there.
   battery_range: >-
     {{ {'battery_soc_kwh': [0, 2000],
-        'battery_max_discharge_kw': [0, 100]}.get(field, [0, 2000]) }}
+        'battery_max_discharge_kw': [0, 100],
+        'consumption_override_kwh': [0, 1000000]}.get(field, [0, 2000]) }}
 
 trigger:
   - platform: state
@@ -182,11 +217,9 @@ action:
       value: >-
         {{ (bool_value | int(0)) if is_discharge_field
            else (states(source) | float(-99999)) }}
-      # The arrival of the reading, not of its last change: a heartbeat that
-      # repeats a steady value has to move the stamp or ODIN keeps aging it.
-      ts: >-
-        {{ (as_timestamp(states[source].last_updated) | round(0) | int)
-           if is_room_field else 0 }}
+      # No ts: the ODIN stamps the arrival itself, so a room value that sits steady for
+      # hours still counts as a measurement to the physics learners.
+      ts: 0
 
   - service: rest_command.odin_get
     response_variable: odin_resp
@@ -203,7 +236,7 @@ action:
         {% if is_discharge_field %}
           {% set held = body.get(field, false) %}
           {{ (1 if (held is sameas true or held == 1) else 0) != (1 if v > 0.5 else 0) }}
-        {# A room number is re-stamped even when it agrees; the rest on change only. #}
+        {# A room number is re-sent even when it agrees; the rest on change only. #}
         {% elif is_room_field %}
           {{ true }}
         {% else %}

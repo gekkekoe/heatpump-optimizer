@@ -30,10 +30,10 @@ Without these two commands the automation fails with
 restart to take effect; the `rest_command.reload` action also picks them up, the
 plain "Reload YAML" button does not.
 
-The `ts` member is optional and only the two room fields send it: it is the time the
-source took its reading, and it is what tells ODIN that this number is a measurement
-from a sensor rather than a value somebody typed into the Overrides box. Everything
-else — a plain `{"key", "value"}` write, and any other field — is unchanged.
+The `ts` member is optional and this blueprint never sends it: ODIN stamps each write with
+its own arrival, and that stamp is what makes a pushed room number a measurement — for the
+hour after it. A writer that does send `ts` wins over the arrival time; a room value of `0`
+clears the override together with its stamp.
 
 ### How does this work?
 1. Ensure your Home Assistant instance is running and the two commands above are loaded.
@@ -43,7 +43,7 @@ else — a plain `{"key", "value"}` write, and any other field — is unchanged.
 
 ---
 
-## Sync Battery, Room Temperature or Buffer Discharge to ODIN (REST)
+## Sync Battery, Room Temperature, Buffer Discharge or an Electric Meter to ODIN (REST)
 This blueprint pushes a Home Assistant sensor value straight into an ODIN on the
 LAN over its REST API — no MQTT needed. Pick the field it feeds:
 
@@ -55,8 +55,9 @@ LAN over its REST API — no MQTT needed. Pick the field it feeds:
 | `room_override_z2` | room temperature, °C | 0 (off) or 5..40 |
 | `discharge_override_z1` | on/off entity, or a numeric sensor (pump power, flow) | on / above threshold → 1, off / at or below → 0 |
 | `discharge_override_z2` | idem, for zone 2 | idem |
+| `consumption_override_kwh` | energy, kWh — a cumulative meter total | 0 (off) .. 1000000 |
 
-Create **one automation per field** — six automations if you feed all of them. Each
+Create **one automation per field** — seven automations if you feed all of them. Each
 one pushes on a change of its source **and once when Home Assistant starts up**, so a
 restart of Home Assistant — or an ODIN that was reflashed or reset while Home
 Assistant was down — is caught up without waiting for the sensor to move. A push that
@@ -65,12 +66,10 @@ The **Room Temperature Override** is the room temperature of that zone, from the
 same channel as a Bluetooth sensor or the pump's own reading: the number replaces
 whatever the pump reports for its boiler room wherever the ODIN plans, controls or
 records the room — the history graph included — and the row under the box says which
-input is in use and how old its last fix was. Because this blueprint also sends the
-time its sensor took the reading, ODIN treats the pushed value as a measurement: it
-ages like any sensor (the row then says it is holding the last fix), and the physics
-learners may use it. A number you type into the box yourself has no such time, so it
-never goes stale — and nothing is learned from it, because a typed temperature cannot
-measure how fast a house cools. A reading between 0 and 5 °C is not forwarded (the
+input is in use and how old its last fix was. Every write is stamped with its arrival, so
+ODIN counts the pushed value as a measurement for an hour and the physics learners may use
+it — that is what the five-minute beat is for (one typed number is stamped too, but an hour
+of it cannot teach tau). A reading between 0 and 5 °C is not forwarded (the
 ODIN refuses that gap: it is the difference between "override off" and "a heated
 room"); set the field back to 0 in the ODIN dashboard to hand the zone back to
 whatever is left.
@@ -86,5 +85,21 @@ passive solar gain; that is the argument for driving it from the pump's own sens
 letting the automation write 0 again when it stops, instead of leaving the dashboard
 switch on. Values are only written when they differ from what the ODIN holds, so the
 flash is not written on every sensor update.
+
+The **Electric Meter** replaces the pump's own kWh counter for everything ODIN books:
+the day totals, the hour rows, the COP the planner learns and the plan-vs-actual
+columns. It is there for the installs where the pump cannot answer the consumption
+question — the dialect has no energy block, the S0 wire sits on another circuit, or the
+only meter in the house is on the P1 port. Forward whatever that meter reads: a lifetime
+total or a since-midnight counter both work, because ODIN differences consecutive
+readings and treats a drop as the meter resetting instead of energy given back, so a
+counter that zeroes at midnight needs no extra automation. The one value that is not a
+reading is exactly `0`: 0 is off, so a since-midnight counter that reports `0.000` at
+midnight switches the override off for that report and the next non-zero one switches it
+back, and the step itself books nothing either way. A `ts` is meaningless here and
+is refused on this key: a meter's total is a level an automation re-reads, not a sample
+that ages. Set the field back to 0 to hand the bookkeeping back to the pump, whose own
+counter stays readable on the same card (Physics Data → Consumption) while it is
+overridden.
 
 [![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint URL.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fgekkekoe%2Fheatpump-optimizer%2Fraw%2Fmain%2Fautomations%2Fsync_odin.yaml)

@@ -227,7 +227,7 @@ On a wide screen every tab shares one content width — the width the Settings c
 
 ![Connection settings](img/settings-card-conn.png)
 
-One card carries all of it, in three groups. **Embedded Broker** decides whether ODIN hosts the broker itself or talks to one elsewhere on your network. **Pump Link** picks *how* ODIN reaches the heat pump — which MQTT dialect, or a Modbus TCP connection — and shows the address fields that choice needs. **MQTT Broker** holds the broker's address and credentials. Everything on this card takes effect at the next reboot (**System** tab).
+One card carries all of it, in three groups. **Embedded Broker** decides whether ODIN hosts the broker itself or talks to one elsewhere on your network, and **MQTT Client** whether ODIN logs in to it at all. **Pump Link** picks *how* ODIN reaches the heat pump — which MQTT dialect, or a Modbus TCP connection — and shows the address fields that choice needs. **MQTT Broker** holds the broker's address and credentials. Everything on this card takes effect at the next reboot (**System** tab).
 
 ### Connection Type
 
@@ -236,7 +236,7 @@ One card carries all of it, in three groups. **Embedded Broker** decides whether
 | **MQTT (Ecodan)** | Default. The Ecodan/Zubadan MQTT dialect — what Asgard, and any other pump-side client publishing that telemetry, speaks. |
 | **MQTT (Panasonic)** *(Beta)* | The HeishaMon / Panasonic Aquarea message stream. |
 | **MQTT (Daikin)**, **MQTT (Vaillant)** *(Beta)* | Those manufacturers' MQTT bridges. |
-| **Modbus TCP (Daikin)**, **(Luxtronik)**, **(NIBE)**, **(Adlar Aurora II)** *(Beta)* | No broker involved at all: ODIN reads the pump's registers and writes its commands straight over its Modbus TCP port. |
+| **Modbus TCP (Daikin)**, **(Luxtronik)**, **(NIBE)**, **(Adlar Aurora II)** *(Beta)*, **(LG Therma V)** *(Beta)* | No broker involved at all: ODIN reads the pump's registers and writes its commands straight over its Modbus TCP port. |
 
 An MQTT dialect needs a pump-side device publishing on the broker; a Modbus TCP dialect is ODIN dialling the pump, or the gateway in front of it, itself.
 
@@ -252,6 +252,7 @@ Each dialect expects something specific to sit — or specifically not to sit �
 | Modbus TCP (Luxtronik) | Nothing; switched on at the controller under SERVICE → Systemsteuerung → Konnektivität, on recent software. |
 | Modbus TCP (NIBE) | Nothing on an S-series controller, but three switches there matter: Modbus TCP on (menu 7.5.9), **"Reading Modbus only"** off (it defaults to on from a recent software version), and **"IP address restriction"** empty or pointing at ODIN. The climate-pause command additionally needs **"AUX via Modbus"** in the pump menu. An F-series on the older SMO 40 controller has no Modbus TCP at all — only an RS485 card, which this transport cannot reach. |
 | Modbus TCP (Adlar Aurora II) | An RS485-to-network gateway: the tank controller only has a serial port (9600 8N1), so a converter — Elfin EW11A, USR-W610, Waveshare — holds those serial settings and ODIN dials the converter. |
+| Modbus TCP (LG Therma V) | An RS485-to-network gateway: the indoor unit has no LAN port, only the RS485 service interface at 9600 8N1 on the terminals marked for a third-party controller. Two DIP switches on the indoor board have to be ON before anything answers — **SW1-1** (the board is a Modbus slave, not a master) and **SW1-2** (the open protocol instead of LG's own register set). The slave id is the pump's own address, read under installer settings → Connectivity → Modbus Address: 1 or 2 on most boards, `33` on the R290 factory setting. |
 
 ### Pump IP[:port[:unit]]
 
@@ -260,6 +261,17 @@ Only shown for the Modbus TCP dialects. The address ODIN dials: the pump itself 
 ### Embedded Broker
 
 Run the MQTT broker on the ODIN itself (port 1883) — no separate broker needed anywhere. ODIN then talks to its own broker, and the pump-side device and Home Assistant must be pointed at this ODIN's IP as their broker; if they point somewhere else, commands never reach the pump. Off means ODIN connects to the external **MQTT Host** below. Takes effect at the next reboot.
+
+### MQTT Client
+
+Whether ODIN itself logs in to the broker. **Auto** (the default) connects only when a heat pump is reached over MQTT. On a **Modbus TCP** installation there is nothing for ODIN to subscribe to — it reads the pump's registers itself — so on Auto such a device opens no broker session at all: no client in the broker's client list, no `hp/+/telemetry` subscriptions, nothing to reconnect when the broker restarts.
+
+**On** forces the connection even on a Modbus install. Two things need it there:
+
+- feeding ODIN a room temperature from elsewhere — publish a number on `<prefix>/<hp>/room_temp/z1` (or `z2`) and it is used like any other room sensor;
+- reading the plan and its per-hour reasons from Home Assistant — the retained result on `odin/solver/result/<hp>` only exists while the client runs.
+
+**Off** never connects. On an MQTT heat pump that also stops the pump link — no telemetry arrives, no command is ever sent — so use it only where the pump is polled over Modbus, or when you deliberately want ODIN off the broker. Takes effect at the next reboot, like the Embedded Broker switch, and the two are independent: ODIN can host a broker for other devices while keeping no client of its own.
 
 ### MQTT Broker
 
@@ -624,11 +636,15 @@ The margin your supplier adds on top of the day-ahead price. Enter it the way it
 
 ![Schedule settings](img/settings-card-sched.png)
 
-The schedule defines your **comfort temperature band** for each hour of the day. ODIN will never plan to heat above the maximum or let the house cool below the minimum. The card carries two separate things — the hourly temperature profile and the optional per-hour power constraints — each with its own save button; on screen the constraints come first and the temperature profile below them.
+The schedule defines your **comfort temperature band** for each hour of the day, per day of the week. ODIN never plans to heat above the maximum or lets the house cool below the minimum. The card carries two separate things — the hourly temperature profile and the optional per-hour power constraints — each with its own save button; on screen the constraints come first and the temperature profile below them.
 
-### 24h Schedule Profile
+### Weekly Schedule Profile
 
-The schedule is divided into **time blocks**. Each block defines settings that apply from its start hour until the next block begins. The last block wraps around to midnight.
+The week is edited **per day**: seven rows, **Monday** to **Sunday**, each with a bar of the temperatures that day runs. Open a day to edit, copy or clear it.
+
+A day is in one of two states. It carries **its own blocks**, or it **follows** the last day that has its own. So a weekday profile is one day of typing, and Saturday and Sunday get their own copy only if you want them to differ. A day nothing was defined for falls back the same way, wrapping back to the last defined day of the week when no earlier day has any. The row states which applies: *own schedule*, *follows Monday*, or *nothing defined yet*.
+
+Within a day the schedule is divided into **time blocks**. Each block applies from its start hour until the next block begins; the last block wraps around to midnight, so the hours before the first block run the last block's temperatures. The same rule one level up: a day's blocks apply from that day until the next day that carries its own.
 
 Each block has four fields:
 
@@ -641,7 +657,7 @@ Each block has four fields:
 
 The resulting comfort band is `[Base + Min, Base + Max]`. ODIN plans heating to stay within this band at all times, shifting load to cheaper or solar hours where the band allows.
 
-**Example schedule:**
+**Example schedule — the blocks of one day:**
 
 | Hour | Base | Min | Max | Meaning |
 |------|------|-----|-----|---------| 
@@ -658,11 +674,13 @@ The resulting comfort band is `[Base + Min, Base + Max]`. ODIN plans heating to 
 - **Night setback:** lower the Base by 0.5–1.0°C during sleeping hours if comfort allows. ODIN will plan accordingly.
 - **Avoid setting Min = 0** (same as Base). This prevents ODIN from ever letting the house drift slightly cool during expensive hours, which reduces savings potential.
 
-**Managing blocks:** click **ADD** to add a block, edit any field in the row, drag to reorder, **✕** to remove, then **Compile & Send** to save.
+**Managing blocks:** click **ADD** to add a block, edit any field in the row, drag to reorder, **✕** to remove, then **Compile & Send** to save. Two more actions work per day: **Copy** puts what that day runs onto other days you pick, and **Clear** removes what the day owns so it follows another day again.
+
+Two limits cover the whole week, and both are checked where a row is born — on **ADD**, **Copy** or paste — instead of at save time, so a refused week never costs you an hour of typing. A week holds **72 blocks** per schedule, and two blocks cannot start the same hour of the same day. The device refuses the same two things on the wire, so a restore or a written value cannot bring them in either.
 
 ### Energy Constraints
 
-The **Schedule Steps** list sets a per-hour cap on either the heat pump's electrical consumption or its thermal output. This is separate from the comfort schedule — where the schedule defines what temperature to maintain, constraints define how hard the heat pump is allowed to work to get there.
+The **Schedule Steps** list sets a per-hour cap on either the heat pump's electrical consumption or its thermal output, and it is edited per day like the temperature profile. This is separate from the comfort schedule — where the schedule defines what temperature to maintain, constraints define how hard the heat pump is allowed to work to get there.
 
 **Constraint Mode:**
 
@@ -672,7 +690,7 @@ The **Schedule Steps** list sets a per-hour cap on either the heat pump's electr
 | **Consumption Cap** | Caps the heat pump's electrical draw (kW) per the constraint schedule. Useful for homes with a limited grid connection or a smart meter limit. |
 | **Output Cap** | Caps the heat pump's thermal output (kW) per the output schedule. Useful for "silent mode" — preventing high output during night hours. |
 
-When a mode other than Off is selected, add one step per period (start hour + maximum kW), drag to reorder, then **Compile & Send Limits**.
+When a mode other than Off is selected, open a day and add one step per period (start hour + maximum kW), drag to reorder, then **Compile & Send Limits**. A day without its own steps follows another day's steps, exactly like the temperature blocks. The consumption and output lists are two schedules of their own; only the one your **Constraint Mode** selects goes to the device.
 
 > **Note:** Constraints are enforced as hard limits — the solver will never produce a plan that exceeds the limit for a given hour. If the constraint is tighter than what is needed to maintain comfort, ODIN will simply plan less heating for that hour, which may cause the house temperature to drift toward (but not below) the schedule minimum. Hours where the cap left no room are labelled **Power limit** in the calendar.
 
@@ -773,7 +791,7 @@ The Optimization card is the solver's control panel and live status:
 | **Heatpump Telemetry** | Live tiles: **DHW** (tank temperature, or the time left on a cycle that is running), **Compressor**, **Defrost** and **Booster** (each with today's runtime and start count), **Prod/Cons day** (today's thermal output and electrical consumption), and per zone the room, flow and return temperature. The **Z2** tiles only appear on a two-zone installation. |
 | **Current Control** | The decision ODIN is executing right now: per zone the flow temperature, the temperature drop it works with and the output it asked for; the hot-water line with tank temperature, target, drop, the start threshold from Settings → DHW and the tank volume; a soak line while a hygiene cycle holds the tank at its setpoint; and on a single-circuit installation the primary feed, return, delta and output. |
 
-When the pump ignores the plan, the card says so out loud: a **CHECK PUMP MODE** banner appears when the pump is running its own weather-curve mode and pays no attention to the flow temperature ODIN commands. The plan is there and correct — the pump simply is not listening. Until it is switched to the fixed/constant setpoint mode of [Section 18](#required-pump-side-control-modes), the pump's own curve decides every hour and ODIN can only watch.
+When the pump ignores the plan, the card says so out loud, in the one banner that matches what ODIN actually knows: **WRONG MODE** when the pump has reported a mode that pays no attention to the flow temperature ODIN commands, **CHECK PUMP MODE** when its mode cannot be read at all. The plan is there and correct — the pump simply is not listening. Where ODIN can read the registers behind that mode, the banner also names the one that is wrong — on an Adlar Aurora II that reads as `weather compensation is still on, so 0x0314 has to be 0` or `its slope L28 (0x0811) has to be 0` — so the fix is one setting at the pump instead of a search through all of them; where it cannot read them, the banner points at the mode of [Section 18](#required-pump-side-control-modes) this pump has to be switched to. Until that is done the pump's own curve decides every hour and ODIN can only watch.
 
 Above the charts sits the **Time View** picker: **Live** (the cards and charts of this page), **Calendar** (the hour-by-hour reason view, below) and **Monthly Report**. While in Live mode a day can be opened for a **Date** and a **Range** of one to three days, so a weekend reads as one picture instead of twenty-four scrolling hours. The Monthly Report takes a month from a month selector and sums it up in tiles — **Month**, **Consumption**, **Production**, **Cost**, **Solar**, and the three seasonal efficiency figures **COP Heat**, **COP Cool** and **COP DHW**.
 
@@ -783,11 +801,11 @@ Above the charts sits the **Time View** picker: **Live** (the cards and charts o
 
 These values are learned automatically from your heat pump's real measured data of the last heating/cooling session and are used by the solver to model your house. Two buttons at the top, **Heating Profile** and **Cooling Profile**, choose which of the two models you are looking at. You can override any value manually — ODIN uses your overridden values until the next automatic daily update.
 
-The card holds two collapsible sub-cards: **Season Profile** (the heating figures, the cooling figures, and a **Zone 2** block inside each group on a two-zone install) and **Universal Building Physics** (the numbers that are not season-specific — daily swing, time constant, passive solar). **Apply Physics Data** writes them back in one go. The card below it, **Misc**, carries the two blocks that are not house physics at all — **Overrides** and **DHW — Domestic Hot Water** — saved together by their own **Apply Overrides & DHW** button. The rows of all four are listed below.
+The card holds two collapsible sub-cards: **Season Profile** (the heating figures, the cooling figures, and a **Zone 2** block inside each group on a two-zone install) and **Universal Building Physics** (the numbers that are not season-specific — daily swing, time constant, passive solar). **Apply Physics Data** writes them back in one go. The card below it, **Misc**, carries the three blocks that are not house physics at all — **Overrides**, **DHW — Domestic Hot Water** and **Consumption** — saved together by their own **Apply Overrides & DHW** button. The rows of all five are listed below.
 
 | Field | Description |
 |-------|-------------|
-| **Heat Produced / Electricity Consumed** | kWh/day and kWh/day of the last heating session (DHW excluded). `COP = Heat / Elec`. |
+| **Heat Produced / Electricity Consumed** | kWh/day and kWh/day of the last heating session (DHW excluded). A defrost is booked here together with the heating it belongs to, never as a mode of its own. `COP = Heat / Elec`. |
 | **Runtime** | Hours/day the heat pump ran in heating mode. Used to derive thermal mass. |
 | **Avg Ambient / Avg Room** | Average outdoor and room temperature on heating days — the pair that determines the heat loss coefficient. |
 | **Delta Room Temp** | Max − min room temperature yesterday (daily swing). Small delta = high thermal mass. |
@@ -797,7 +815,8 @@ The card holds two collapsible sub-cards: **Season Profile** (the heating figure
 | **Passive Solar Factor** | kWh per W/m² irradiance — heat entering through windows from sunlight, independent of your PV panels. Learned automatically inside a hard 0.002–0.030 envelope, starting from a conservative default of 0.005; the house-type table below says what each range means. |
 | **DHW block** | The hot-water figures as the solver sees them: the live tank temperature, **Target** and **Max Drop** — both read from the pump, which owns that pair, not from your settings — the **Start Threshold** you set under Settings → DHW, and the tank volume. |
 | **Learned Tank Loss (1/h)** | How strongly your tank's cooling tracks the surrounding temperature, learned from measured tank drift between heating cycles; correct it by hand if you know better. **Est. Loss Now** translates it to °C/h at the current temperatures — the rate the DHW trigger timing uses. Until enough cooling intervals have been observed, ODIN falls back to a generic 0.5 °C/h. |
-| **Overrides** | A sub-card of **Misc**, not of this card. **Room Temperature Override** (per zone) is that zone's room temperature, and every source shares one channel with it: a Bluetooth sensor mapped under System → Bluetooth, or a value pushed over the API together with its measurement time. **Discharge Override** (per zone) forces discharge on top of whatever the pump itself asks for — and while it is on, that zone stops learning its time constant and passive-solar figures, because a forced discharge is not a measurement of your house. |
+| **Overrides** | A sub-card of **Misc**, not of this card. **Room Temperature Override** (per zone) is that zone's room temperature, and every source shares one channel with it: a Bluetooth sensor mapped under System → Bluetooth, or a value pushed over the API. A pushed value carries no timestamp of its own — ODIN stamps it with the moment the write arrived, and that stamp is what makes it a measurement the learners accept. **Discharge Override** (per zone) forces discharge on top of whatever the pump itself asks for — and while it is on, that zone stops learning its time constant and passive-solar figures, because a forced discharge is not a measurement of your house. |
+| **Consumption** | A sub-card of **Misc** with one field: an **external kWh meter**, the reading of a meter on the heat pump's own supply — a P1 port, a smart-meter entity, an S0 counter. While it is non-zero it *is* the meter for everything ODIN books: the day totals, the hour rows, the plan-versus-actual columns and the COP the planner learns. `0` is off and hands the bookkeeping back to the pump's own counter. The line under the field says which of the two is in charge and shows the pump's own counter next to it (`none` when the pump has no counter of its own); Forward whatever the meter reads — a lifetime total or a since-midnight counter: ODIN differences consecutive readings and reads a drop as the meter resetting, not as energy given back. |
 
 **Typical values** (for sanity-checking what ODIN learned):
 
@@ -847,6 +866,7 @@ Switch the **Time View** to **Calendar** and open any hour to see *why* the solv
 
 | Reason | Meaning |
 |--------|---------|
+| **—** | Nothing to say about that hour: no plan covers it — an hour in the past, or before the first solve finished. |
 | **Coasting** | The heat pump was off because doing nothing was cheaper than running — the house could coast on stored heat. |
 | **Comfort (limit)** | The house was at or past the edge of your comfort band, so the hard comfort penalty forced the pump to run regardless of price. |
 | **Comfort (drift)** | Inside the comfort band, but the room is on the uncomfortable side of your target temperature — too warm when cooling, too cold when heating. The solver ran to hold or recover that position and stay ahead of a future hard-limit hit. This is the most common reason on a normal day. |
@@ -857,6 +877,8 @@ Switch the **Time View** to **Calendar** and open any hour to see *why* the solv
 | **Buffering (solar)** | Same, but specifically because your PV array is covering the draw right now. |
 | **Modulation / Wear** | The load level was chosen for part-load efficiency rather than price or comfort. |
 | **Energy price** | No other factor dominated — simply the cheapest hour to buy the kWh needed. |
+| **Holds heat** | Nothing asked for this hour: your room was already warm enough and the power was not cheap. The pump ran a little extra anyway, to warm the house now and run less later. |
+| **No named reason** | The last resort: nothing asked for the hour, the power was not cheap, and the room was not warm enough to be storing heat either. Many of these hours point at a too-narrow comfort band or a too-high **kWh Penalty**, not at the tariff. |
 | **Hot water** | Hour reserved for a domestic hot water (DHW) heating cycle. |
 | **Legionella** | Hour reserved for the legionella cycle (ODIN-planned slot or the pump's own system-cycle window). |
 | **Stop price** | Blocked: the hour's **effective** price for the pump — the tariff after your own PV is credited, at 25 % of the tariff — sat at or above your **Stop Price** setting, so grid use was forbidden this hour. An hour the sun covers enough is not blocked, even on an expensive tariff. |
@@ -865,10 +887,15 @@ Switch the **Time View** to **Calendar** and open any hour to see *why* the solv
 
 The last three ("blocked") reasons are worth noticing specifically — they mean the solver *wanted* to run but a setting stopped it, which is different from voluntarily coasting. If the house is drifting cold and the calendar keeps showing one of these, that setting is the first place to check.
 
-**Reading "Comfort (drift)" vs "Buffering".** These are ranked by *necessity*, not by which cost was biggest, and the giveaway is where the room sits relative to your target line on the chart:
+**Reading the far side of the target.** These are ranked by *necessity*, not by which cost was biggest, and the giveaway is where the room sits relative to your target line on the chart:
 
 - On the uncomfortable side of the target → **Comfort (drift)**. The pump had to run; a low price or free solar may well have made it cheap, but it was not the reason.
-- On the far side of the target → **Buffering**. Comfort was already satisfied and the solver deliberately overshot to bank energy, either because PV covered it (**Buffering (solar)**) or because the grid price was simply good right now (**Buffering (cheap)**).
+- On the far side of the target, in an hour priced *below* the day's average → **Buffering**. Comfort was already satisfied and the solver deliberately overshot to bank energy, either because PV covered it (**Buffering (solar)**) or because the grid price was simply good right now (**Buffering (cheap)**).
+- On the far side of the target, in an hour *not* below that average → **Holds heat**. The same overshoot, but with nothing paying for it: the tariff lost on that hour, so it is not called **Energy price**.
+- Neither side, and no factor claimed the hour → **No named reason**.
+
+With **Use Battery for Planning** on, an hour the battery was assigned to shows **Battery** instead of **Energy price**, **Buffering (cheap)**, **Buffering (solar)**, **Modulation / Wear**, **Holds heat** or **No named reason** — the battery says *who paid*, not *why the pump ran*. **Buffering (later)** is the one label that survives that rewrite, because it names *when* the heat is used rather than who paid for it.
+
 
 ### What good performance looks like
 
@@ -921,7 +948,7 @@ ODIN fetches automatically as well: the first attempt for tomorrow's day-ahead p
 | **Settings Backup** | **Save Settings** writes every Settings/Solver value (numbers, switches, sliders, selects) to a JSON file; **Restore Settings** loads such a file back onto the device. |
 | **Data Backup** | Restores a data backup made on an Asgard/ECODAN pump (System → Data Backup → Backup History / Backup Physics): **Restore History** replaces this heat pump's hourly archive, **Restore Physics** seeds the learned model values — useful when migrating from Asgard to ODIN. |
 | **Firmware** | **Check for Update** asks GitHub for the newest release. When one exists, a banner appears with the version and its release notes and **Download** flashes it — nothing is flashed before you press that button. A test build is offered as **Download pre-release**, carries a **PRE-RELEASE** badge and says so in its own warning; the same badge sits next to the firmware version when the device itself runs a pre-release. **Manual Firmware Upload** flashes a `.bin` you downloaded from the releases page yourself (upload takes 20–60 s). **Reboot Device** restarts ODIN. ⚠️ **Do not power off the device during an update.** |
-| **System Logs** | Live scrolling log. **Message Log** downloads the device's own log ring. **Log MQTT/Modbus** records every raw frame to and from the pump in a 2 MB ring in PSRAM — off by default, because keeping it on all the time wears the flash; **Download MQTT/Modbus** saves that ring as a `.bin` when a dialect needs debugging. **Debug JSON** downloads the last solve request and response payload — the primary tool for troubleshooting. **Pause** freezes the display without stopping logging; **Clear** resets the buffer. |
+| **System Logs** | Live scrolling log. **Message Log** downloads the device's own log ring. **Log MQTT/Modbus** records the traffic to and from the pump — every MQTT publish, every Modbus request, answer and refusal — into a 2 MB ring in PSRAM, off by default; the counter next to the switch says how full that ring is. **Download MQTT/Modbus** saves it as `odin_msglog_…bin`: a compact recording that `scripts/msglog_decode.py` in the firmware repo turns back into a timeline. `--link` answers *"did my write land, and what did the pump refuse?"*, `--watch 0x0301` names everyone who set one register, `--topic` filters the timeline and `--json` feeds `jq`. **Debug JSON** downloads the last solve request and response payload — the primary tool for troubleshooting. **Pause** freezes the display without stopping logging; **Clear** resets the buffer. |
 
 ---
 
@@ -934,7 +961,7 @@ ODIN never talks to the heat pump's own bus. Depending on the **Connection Type*
 | MQTT — Ecodan | Asgard, or any client publishing that telemetry. Recommended for Ecodan/Zubadan. |
 | MQTT — Panasonic | HeishaMon's native message stream. |
 | MQTT — Daikin, Vaillant *(Beta)* | The manufacturer's own MQTT bridge. |
-| Modbus TCP — Daikin, Luxtronik, NIBE, Adlar Aurora II *(Beta)* | Nothing in between: ODIN reads the pump's registers and writes its commands straight to the pump or gateway address. |
+| Modbus TCP — Daikin, Luxtronik, NIBE, Adlar Aurora II *(Beta)*, LG Therma V *(Beta)* | Nothing in between on Daikin, Luxtronik and NIBE: ODIN reads the pump's registers and writes its commands straight to the pump or gateway address. The Adlar and the Therma V indoor unit have no network port of their own, so an RS485-to-network gateway sits in front of them and ODIN dials the gateway — [Section 7](#7-settings--connection) lists what each of the two has to have switched on first. |
 
 What follows is about the two pump-side firmwares that carry the Ecodan and Panasonic dialects.
 
@@ -1200,6 +1227,29 @@ Both endpoints are stateless — push whenever your data updates:
 
 > **Tip:** In Home Assistant, a Time-based automation that calls `rest_command.push_odin_prices` at 14:15 and `rest_command.push_odin_weather` every hour on the :55 mark — a few minutes before ODIN's hourly solve — is a reliable and low-overhead integration pattern.
 
+### Feeding live values
+
+Prices and weather are not the only things an external system can push. `POST /dashboard/set` writes one Settings/Physics field per call:
+
+```
+POST /dashboard/set
+{"key": "room_override_z1", "value": 21.4}
+```
+
+| Field | Accepted | What it does |
+|-------|----------|--------------|
+| `room_override_z1`, `room_override_z2` | `0` (off) or 5–40 °C | That zone's room temperature. It replaces the pump's own reading wherever ODIN plans, controls or records the room. |
+| `battery_soc_kwh` | 0–2000 kWh | Battery state of charge. Only planned with while battery planning is on. |
+| `battery_max_discharge_kw` | 0–100 kW | Cap on the discharge ODIN may recommend. |
+| `discharge_override_z1`, `discharge_override_z2` | on / off | Force buffer discharge into that zone. |
+| `consumption_override_kwh` | `0` (off) or 0–1 000 000 kWh | The external kWh meter that replaces the pump's own counter ([Physics Data](#physics-data-daily-averages)). |
+
+A value outside its accepted band is refused and the field keeps what it had. `0` is the off value for the two room fields and for the meter. The gap between `0` and `5 °C` on a room field is refused on purpose: it is the difference between *override off* and *a room that is being heated*, so a frosty hallway or a sensor that just came back never clears your override by accident.
+
+A pushed room number carries no timestamp of its own. ODIN stamps it with the moment the write arrived, and that stamp is what makes it a measurement the learners accept — which is why the value has to keep arriving rather than be pushed once.
+
+**Home Assistant:** [`automations/sync_odin.yaml`](../../automations/sync_odin.yaml) is a blueprint for exactly this — one sensor in, one field out, forwarded on a change, on a five-minute beat, and once more after a Home Assistant restart. Setup in [`automations/setup_sync.md`](../../automations/setup_sync.md).
+
 ---
 
 ## 21. MQTT Integration
@@ -1212,13 +1262,15 @@ With the default topic prefix `hp` and heat-pump id `hp1`:
 | Pump → ODIN | `hp/hp1/info` | Device info (opaque). |
 | Pump → ODIN | `hp/hp1/room_temp/<zone>` | Zone thermostat temperatures (independent channels, own timestamps). |
 | ODIN → Pump | `hp/hp1/commands/setpoint` | The commanded setpoint/operation for the current plan hour. |
-| ODIN → broker | `odin/solver/result/hp1` | The full solver result (plan, prices, reasons) — retained, so a late-subscribing dashboard sees the current plan immediately. |
+| ODIN → broker | `odin/solver/result/hp1` | The full solver result (plan, prices, and the per-hour `decision_reason` labels explained in [Calendar](#calendar--why-the-solver-did-or-didnt-run)) — retained, so a late-subscribing dashboard sees the current plan immediately. |
 | ODIN → broker | `odin/status` | Retained `online` presence of ODIN itself. |
 | HeishaMon → ODIN | `<hp_prefix>/main/+` | HeishaMon's native message stream. |
 
 The pump-side rows belong to the MQTT dialects. Under a **Modbus TCP** connection type there is no broker between ODIN and the pump at all — telemetry is read from the pump's registers and commands are written back to them — while ODIN still publishes the solver result and its own status to whatever broker is configured.
 
 **Home Assistant:** point HA at the same broker (or at the ODIN's IP when using the **embedded broker**), then subscribe to the telemetry and `odin/solver/result/+` topics — they double as sensor sources. Commands from HA should go through the same `commands/setpoint` topic the solver uses.
+
+**A Modbus TCP installation needs no MQTT at all**, and by default uses none: with **MQTT Client** on **Auto**, ODIN does not connect to a broker when every heat pump is polled over Modbus. The topics on this page then do not appear — set **MQTT Client** to **On** (and reboot) if you want the retained plan on `odin/solver/result/<hp>` or a room temperature fed in over MQTT anyway.
 
 **Debug:** `GET /api/debug` returns the last solve request/response payload; `GET /api/stats`, `/api/version`, `/api/config`, `/api/physics`, `/api/forecast`, `/api/logs` expose live state, and `POST /api/solve` triggers a solve over HTTP.
 
@@ -1231,15 +1283,16 @@ Use this checklist after first-time setup to confirm everything is configured co
 - [ ] ODIN is connected to your home Wi-Fi (dashboard loads via local IP)
 - [ ] Setup Wizard completed — or all setting areas manually configured
 - [ ] **Connection**: the right dialect chosen — for a Modbus TCP dialect a correct **Pump IP**, otherwise a pump-side device and ODIN on the **same broker** (or an HP Command URL configured) — and the **HP** badge in the header shows **Online**
-- [ ] The pump runs in the fixed flow-temperature mode of [Section 18](#required-pump-side-control-modes); no **CHECK PUMP MODE** banner on the Monitoring tab
+- [ ] The pump runs in the fixed flow-temperature mode of [Section 18](#required-pump-side-control-modes); no **WRONG MODE** or **CHECK PUMP MODE** banner on the Monitoring tab
 - [ ] **Latitude** and **Longitude** are set to your location
 - [ ] **Bidding Zone** matches your country
 - [ ] **Price Mode** is Dynamic if you have a dynamic contract, and **Price Markup** is entered as your contract states it, in €/kWh excluding VAT
 - [ ] **Solar arrays** configured (or solar off)
 - [ ] **Max / Min Thermal Output** match the heat pump's datasheet, and the flow limits are what your emitters can take
 - [ ] **kWh Penalty** is set (start with `0.5`)
-- [ ] **24h Schedule** has at least one block with sensible temperature targets
+- [ ] **Weekly Schedule** has at least one day carrying blocks with sensible temperature targets
 - [ ] **DHW**: tank volume, sensor and threshold set; legionella mode chosen
+- [ ] Where the pump gives no usable kWh counter, an **external kWh meter** is set under Monitoring → Physics Data → Misc → **Consumption**, and the Consumption card names that meter as the one running the history
 - [ ] **Battery** and **Mixing Tank** are switched on only when that hardware is really there
 - [ ] Go to the **Data** tab and click **Fetch Latest Data** — verify prices and weather load correctly
 - [ ] Go to the **Monitoring** tab — after the next hour, the plan and chart show a successful solve
