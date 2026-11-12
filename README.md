@@ -34,7 +34,6 @@ Building a reliable, self-learning MPC solver that handles real-world building p
 | **Mitsubishi Ecodan / Zubadan** | MQTT | [Asgard](https://github.com/gekkekoe/esphome-ecodan-hp/tree/main/asgard) (Virtual Thermostats) | ODIN 2.0 | ✅ Supported |
 | **Panasonic Aquarea** | MQTT | HeishaMon | ODIN 2.0 |  ✅  Supported |
 | **Adlar Castra** *(Aurora II)* | Modbus TCP | Native / RS485-to-TCP gateway | ODIN 2.0 | 🧪 [Beta](https://github.com/gekkekoe/heatpump-optimizer/discussions/27) |
-| **Daikin Altherma** | MQTT | ESPAltherma / P1P2MQTT | ODIN 2.0 | 🧪 [Beta](https://github.com/gekkekoe/heatpump-optimizer/discussions/27) |
 | **Daikin Altherma** | Modbus TCP | Daikin DCOM / HomeHub | ODIN 2.0 | 🧪 [Beta](https://github.com/gekkekoe/heatpump-optimizer/discussions/27) |
 | **Vaillant aroTHERM** | MQTT | ebusd (eBUS) | ODIN 2.0 | 🧪 [Beta](https://github.com/gekkekoe/heatpump-optimizer/discussions/27) |
 | **NIBE** | Modbus TCP | Native Modbus TCP (S-Series / SMO) | ODIN 2.0 | 🧪 [Beta](https://github.com/gekkekoe/heatpump-optimizer/discussions/27) |
