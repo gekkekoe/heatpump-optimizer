@@ -43,7 +43,7 @@ clears the override together with its stamp.
 
 ---
 
-## Sync Battery, Room Temperature, Buffer Discharge or an Electric Meter to ODIN (REST)
+## Sync Battery, Room Temperature, Buffer Discharge, an Electric Meter or Solar Production to ODIN (REST)
 This blueprint pushes a Home Assistant sensor value straight into an ODIN on the
 LAN over its REST API — no MQTT needed. Pick the field it feeds:
 
@@ -56,8 +56,9 @@ LAN over its REST API — no MQTT needed. Pick the field it feeds:
 | `discharge_override_z1` | on/off entity, or a numeric sensor (pump power, flow) | on / above threshold → 1, off / at or below → 0 |
 | `discharge_override_z2` | idem, for zone 2 | idem |
 | `consumption_override_kwh` | energy, kWh — a cumulative meter total | 0 (off) .. 1000000 |
+| `production_meter_kwh` | solar inverter energy, kWh — the cumulative AC total | 0 (off) .. 100000000 |
 
-Create **one automation per field** — seven automations if you feed all of them. Each
+Create **one automation per field** — eight automations if you feed all of them. Each
 one pushes on a change of its source **and once when Home Assistant starts up**, so a
 restart of Home Assistant — or an ODIN that was reflashed or reset while Home
 Assistant was down — is caught up without waiting for the sensor to move. A push that
@@ -101,5 +102,29 @@ is refused on this key: a meter's total is a level an automation re-reads, not a
 that ages. Set the field back to 0 to hand the bookkeeping back to the pump, whose own
 counter stays readable on the same card (Physics Data → Consumption) while it is
 overridden.
+
+The **Solar Production** counter is the inverter's cumulative AC energy: the same lifetime
+kWh figure its own display or app shows, which in Home Assistant is the total-energy sensor
+of the inverter integration — not its instantaneous power sensor. ODIN differences two
+readings an hour apart and reads a drop as the counter being reset or the inverter replaced,
+never as negative sun, so the total is what it needs. Exactly `0` is off, and the band's top
+is 100 000 000 kWh on purpose: a plant that has been running a few years legitimately reads
+60 000 and more (the reference install sits at 64 775 kWh), and a limit that merely looked
+plausible would refuse the real number — the ceiling is there to catch a counter published
+in Wh instead of kWh. The value travels as a JSON number and is kept in a double, so the
+cent on 64 775.20 kWh survives the trip; that cent is not decoration, because an hour's
+energy is one part in twenty thousand of the figure.
+
+This is the one field here whose **age** matters: ODIN believes the counter for 20 minutes
+after a write, because a publisher that stopped looks exactly like a windless afternoon in
+the number alone. The automation's five-minute beat is therefore what keeps the correction
+alive; when Home Assistant has been down longer than that, the plan runs on the weather
+forecast alone instead of freezing the last correction in place. What the measurements are
+allowed to do is a switch on the ODIN dashboard — Physics Data → Production, **Measured PV
+Feedback**, off as shipped — and the inverter's AC ceiling is typed on that same card. Fill
+the ceiling in: without it the noon hours that sit at the inverter's limit cannot be
+recognised as clipped, and ODIN then corrects this week's sky but never learns this plant's
+efficiency. The card shows the last hour it compared, the correction the coming hours carry,
+and how old the newest reading is.
 
 [![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint URL.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fgekkekoe%2Fheatpump-optimizer%2Fraw%2Fmain%2Fautomations%2Fsync_odin.yaml)

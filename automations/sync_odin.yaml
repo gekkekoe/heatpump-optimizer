@@ -2,15 +2,17 @@ blueprint:
   name: Sync a Home Assistant Value to ODIN (REST)
   description: >
     Forwards a Home Assistant sensor value to an ODIN device through its REST
-    API, so Home Assistant can feed the solver's numbers without MQTT. Seven
+    API, so Home Assistant can feed the solver's numbers without MQTT. Eight
     fields to choose from: the two battery numbers (state of charge in kWh,
     maximum discharge in kW), the room temperature override of zone 1 or zone 2 —
     the temperature the planner uses when the pump has no room sensor of its own
     (or reads the boiler room instead of the living room) — the buffer discharge
     override of zone 1 or zone 2, which tells the ODIN that heat is leaving the
     store into that zone's loop even though the pump's own zone pump says it
-    stands still, and the electric meter reading, for an install whose heat pump
-    gives no usable consumption figure at all.
+    stands still, the electric meter reading, for an install whose heat pump
+    gives no usable consumption figure at all, and the solar inverter's cumulative
+    AC production, which lets the sun estimate be corrected by what the roof
+    actually delivered.
 
 
     Only valid readings are forwarded: what arrives has to be something the chosen
@@ -24,12 +26,16 @@ blueprint:
 
 
     Accepted bands: battery SOC 0..2000 kWh, discharge limit 0..100 kW, room
-    temperature override 0 (off) or 5..40 °C, electric meter 0..1000000 kWh. The
-    gap between 0 and 5 on the room field is refused on purpose — it is the
-    difference between "override off" and "a room that is being heated" — so a
-    reading inside it (a frosty hallway, a sensor that just came back online) is
-    never forwarded and the ODIN keeps whatever it had. The meter has no such gap:
-    0 means off and 0.25 kWh is a meter that was installed this morning.
+    temperature override 0 (off) or 5..40 °C, electric meter 0..1000000 kWh, solar
+    production counter 0..100000000 kWh. The gap between 0 and 5 on the room field is
+    refused on purpose — it is the difference between "override off" and "a room that is
+    being heated" — so a reading inside it (a frosty hallway, a sensor that just came
+    back online) is never forwarded and the ODIN keeps whatever it had. The meter has no
+    such gap: 0 means off and 0.25 kWh is a meter that was installed this morning. The
+    production band runs to 100 million kWh for the same reason: a plant that has been
+    running a few years legitimately reads 60 000 and more, and a limit that merely
+    looked plausible would refuse the real number — the top exists to catch a counter
+    published in Wh instead of kWh.
 
 
     A room temperature override replaces the pump's own room reading wherever the
@@ -57,6 +63,21 @@ blueprint:
     total — nothing expires. Set the field back to 0 in the ODIN dashboard (Physics
     Data → Consumption) to hand the bookkeeping back to the pump's own counter, which
     keeps reporting on the same card while it is overridden.
+
+    The solar production field takes the inverter's cumulative AC energy — the same
+    lifetime kWh figure its own display or app shows, from the Home Assistant energy
+    sensor of the inverter integration. ODIN differences two readings an hour apart and
+    reads a drop as the counter being reset or the inverter replaced, never as negative
+    sun, so send the total and not the current power. Exactly `0` is the off value. This
+    field is the one input here whose age matters: ODIN believes the counter for 20
+    minutes after a write, and a publisher that stopped looks exactly like a windless
+    afternoon in the number alone — so the five-minute beat below is not a courtesy, it
+    is what keeps the correction alive. When it goes stale the plan falls back to the
+    weather forecast alone rather than freezing the last correction in place. The
+    correction itself is a switch on the ODIN dashboard (Physics Data → Production), off
+    as shipped, and the inverter's AC ceiling is typed there too: without that ceiling
+    the noon hours that sit at the inverter's limit cannot be recognised as clipped, and
+    ODIN then never learns the plant's efficiency — only this week's sky.
 
 
     A discharge override is a different kind of input: it is OR'd with what the
@@ -92,10 +113,10 @@ blueprint:
             content_type: "application/json"
 
     A Home Assistant restart re-syncs: the automation also triggers on Home
-    Assistant start and pushes the source's current value once it is known again,
-    so an ODIN that was reflashed or reset while Home Assistant was down is caught
-    up without waiting for the sensor to move. The battery, discharge and meter
-    fields are left alone when the two already agree.
+    Assistant start and pushes the source's current value once it is known again, so an
+    ODIN that was reflashed or reset while Home Assistant was down is caught up without
+    waiting for the sensor to move. The battery, discharge, meter and production fields
+    are left alone when the two already agree.
   domain: automation
   input:
     source_entity:
@@ -105,8 +126,11 @@ blueprint:
         sensor in kW (for the discharge limit), a room temperature sensor in °C
         (for the room temperature override), an on/off entity — binary sensor,
         input boolean, switch — or any numeric sensor (for the discharge
-        override), or an energy sensor in kWh (for the electric meter reading:
-        the pump's total, a smart meter's total, anything cumulative).
+        override), an energy sensor in kWh that only ever grows (for the electric
+        meter reading: the pump's total, a smart meter's total), or the
+        inverter's cumulative AC energy sensor in kWh (for the solar production
+        counter — the inverter integration's total-energy entity, not its
+        instantaneous power one).
       selector:
         entity:
           domain:
@@ -131,6 +155,9 @@ blueprint:
         the flag back to the pump. consumption_override_kwh replaces the pump's
         own kWh counter with the forwarded meter reading, for a pump that cannot
         report its consumption; 0 turns that override off too.
+        production_meter_kwh feeds the inverter's cumulative AC production, which
+        ODIN uses to correct the sun estimate; 0 turns that feed off, and the
+        plan then runs on the forecast alone.
       default: battery_soc_kwh
       selector:
         select:
@@ -143,6 +170,7 @@ blueprint:
             - discharge_override_z1
             - discharge_override_z2
             - consumption_override_kwh
+            - production_meter_kwh
 
     discharge_threshold:
       name: Discharge Threshold
@@ -175,11 +203,14 @@ variables:
        else (1 if (state_str | float(-99999)) > (threshold | float(0.5)) else 0) }}
   # The kWh meter shares the plain-range rule; its band is the device's own
   # (kConsumptionOverrideMax in hp_telemetry.h), so a reading that cannot be a
-  # meter is refused here as well as there.
+  # meter is refused here as well as there. The solar counter's band is the
+  # device's too (kProductionMeterMax in solar_feedback.h), and it is that wide
+  # because a five-figure lifetime total is the normal case, not an overflow.
   battery_range: >-
     {{ {'battery_soc_kwh': [0, 2000],
         'battery_max_discharge_kw': [0, 100],
-        'consumption_override_kwh': [0, 1000000]}.get(field, [0, 2000]) }}
+        'consumption_override_kwh': [0, 1000000],
+        'production_meter_kwh': [0, 100000000]}.get(field, [0, 2000]) }}
 
 trigger:
   - platform: state
