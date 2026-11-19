@@ -52,7 +52,7 @@ ODIN 2.0 is the standalone optimizer. It talks to your heat pump **directly over
 While ODIN is highly advanced, it is important to set the right expectations regarding what the system can and cannot do:
 
 - **External API Dependency:** For fully automatic operation, ODIN relies on third-party servers for weather forecasts (e.g., Open-Meteo) and electricity prices (e.g., ENTSO-E). While multiple sources are supported, these external services can change their data structures, experience downtime, or alter their free tiers outside of our control. *Mitigation:* ODIN features built-in manual API endpoints (see [Section 20](#20-api-data-feeds--pushing-prices--weather)). You can push your own data locally (e.g., via Home Assistant), ensuring ODIN will always work regardless of what happens to the public APIs.
-- **Solar Forecast Inaccuracy:** Solar production is calculated using weather predictions, which cannot be 100% accurate. Passing clouds, unexpected haze, or partial panel shading can cause the actual yield to be lower than the forecast. *Mitigation:* Use the **Solar Min. Ratio** parameter (see [Section 9](#solar-min-ratio)) to demand a larger share of sun coverage in an hour before ODIN is willing to treat that hour as free solar.
+- **Solar Forecast Inaccuracy:** Solar production is calculated using weather predictions, which cannot be 100% accurate. Passing clouds, unexpected haze, or partial panel shading can cause the actual yield to be lower than the forecast. *Mitigation:* Use the **Solar Min. Ratio** parameter (see [Section 9](#solar-min-ratio)) to demand a larger share of sun coverage in an hour before ODIN is willing to treat that hour as free solar. *Better:* feed the inverter's AC counter and switch on **Measured PV Feedback** ([Production](#production--measured-pv-feedback)).
 - **Fixed Value for Your Own PV:** the plan prices self-consumed solar at **25 % of the tariff** — one figure the firmware carries, not a feed-in tariff you enter. It is what decides how far sun can pull an hour's effective price down, and therefore whether an expensive hour still clears the **Stop Price** ceiling ([Section 9](#stop-price-kwh)). A different export rate on your contract is unknown to ODIN: it never plans around selling.
 - **Human Factors & Unpredictable Heat Gains:** The solver learns your house's thermal behavior over time, but it cannot predict human actions. Opening windows for an hour, lighting a fireplace, cooking a large meal, or hosting a party will alter the room temperature in ways the model could not anticipate. ODIN will notice the deviation and adjust the plan for the *next* hour.
 - **Hardware Overrides:** ODIN optimizes the schedule, but it cannot override the heat pump's physical safety limits or hard-coded triggers. For instance, if someone takes a very long shower and the DHW tank temperature hits the physical drop point, the heat pump will start immediately to recover the DHW tank, regardless of ODIN's cost plan.
@@ -164,7 +164,7 @@ Under **Solar Behavior**:
 - **Solar-Only Cooling** — only run cooling mode when solar covers the load.
 - **Min Solar Coverage for HP (%)** — how much of the HP load must come from solar before the solver may import cheap grid power, as a percentage (0 = off). The Settings field holds the same number as a fraction, so `50` here is `0.50` under Settings → Solver Tuning ([Section 9](#solar-min-ratio)).
 
-If you have no solar panels, leave the toggle off. ODIN will still optimize around price. Please be advised that solar production is an **estimation** based on the parameters.
+If you have no solar panels, leave the toggle off. ODIN will still optimize around price. Please be advised that solar production is an **estimation** based on the parameters; the inverter's AC counter can replace that estimation later ([Section 15](#production--measured-pv-feedback)).
 
 ### Step 4 — Weather Data Source
 
@@ -772,7 +772,7 @@ One card per physical array (roof row / direction). The device computes the kWp-
 
 > **Note:** If the panels have a *clear* horizon but the forecast still overshoots real production, the cause is usually **Capacity (kWp)** or **PR**, not shade — leave the shade factors at `1.00` in that case.
 
-**Apply Solar** writes this list. The solver's solar rules — **Solar Min. Ratio** and **Cool Only From Solar** — are no longer part of it; they sit with the other planning rules in [Section 9](#9-settings--solver-tuning) and save through their own **Apply Solar Rules**.
+**Apply Solar** writes this list. The solver's solar rules — **Solar Min. Ratio** and **Cool Only From Solar** — are no longer part of it; they sit with the other planning rules in [Section 9](#9-settings--solver-tuning) and save through their own **Apply Solar Rules**. Measured production is not a Settings field either: it arrives on the **Production** sub-card under Monitoring → Physics Data → Misc ([Section 15](#production--measured-pv-feedback)).
 
 ---
 
@@ -801,7 +801,7 @@ Above the charts sits the **Time View** picker: **Live** (the cards and charts o
 
 These values are learned automatically from your heat pump's real measured data of the last heating/cooling session and are used by the solver to model your house. Two buttons at the top, **Heating Profile** and **Cooling Profile**, choose which of the two models you are looking at. You can override any value manually — ODIN uses your overridden values until the next automatic daily update.
 
-The card holds two collapsible sub-cards: **Season Profile** (the heating figures, the cooling figures, and a **Zone 2** block inside each group on a two-zone install) and **Universal Building Physics** (the numbers that are not season-specific — daily swing, time constant, passive solar). **Apply Physics Data** writes them back in one go. The card below it, **Misc**, carries the three blocks that are not house physics at all — **Overrides**, **DHW — Domestic Hot Water** and **Consumption** — saved together by their own **Apply Overrides & DHW** button. The rows of all five are listed below.
+The card holds two collapsible sub-cards: **Season Profile** (the heating figures, the cooling figures, and a **Zone 2** block inside each group on a two-zone install) and **Universal Building Physics** (the numbers that are not season-specific — daily swing, time constant, passive solar). **Apply Physics Data** writes them back in one go. The card below it, **Misc**, carries the four blocks that are not house physics at all — **Overrides**, **DHW — Domestic Hot Water**, **Consumption** and **Production** — saved together by their own **Apply Overrides & DHW** button. The rows of all six are listed below.
 
 | Field | Description |
 |-------|-------------|
@@ -817,6 +817,7 @@ The card holds two collapsible sub-cards: **Season Profile** (the heating figure
 | **Learned Tank Loss (1/h)** | How strongly your tank's cooling tracks the surrounding temperature, learned from measured tank drift between heating cycles; correct it by hand if you know better. **Est. Loss Now** translates it to °C/h at the current temperatures — the rate the DHW trigger timing uses. Until enough cooling intervals have been observed, ODIN falls back to a generic 0.5 °C/h. |
 | **Overrides** | A sub-card of **Misc**, not of this card. **Room Temperature Override** (per zone) is that zone's room temperature, and every source shares one channel with it: a Bluetooth sensor mapped under System → Bluetooth, or a value pushed over the API. A pushed value carries no timestamp of its own — ODIN stamps it with the moment the write arrived, and that stamp is what makes it a measurement the learners accept. **Discharge Override** (per zone) forces discharge on top of whatever the pump itself asks for — and while it is on, that zone stops learning its time constant and passive-solar figures, because a forced discharge is not a measurement of your house. |
 | **Consumption** | A sub-card of **Misc** with one field: an **external kWh meter**, the reading of a meter on the heat pump's own supply — a P1 port, a smart-meter entity, an S0 counter. While it is non-zero it *is* the meter for everything ODIN books: the day totals, the hour rows, the plan-versus-actual columns and the COP the planner learns. `0` is off and hands the bookkeeping back to the pump's own counter. The line under the field says which of the two is in charge and shows the pump's own counter next to it (`none` when the pump has no counter of its own); Forward whatever the meter reads — a lifetime total or a since-midnight counter: ODIN differences consecutive readings and reads a drop as the meter resetting, not as energy given back. |
+| **Production** | A sub-card of **Misc**: **Solar AC Energy** (the inverter's cumulative AC counter), **Inverter Max Capacity** (its AC ceiling) and **Measured PV Feedback** (whether the counter may correct the solar forecast). The line under the fields reports the reading age, the correction in force and the number of hours behind the learned plant factor; the row below compares the last closed hour, measured against published. [Details](#production--measured-pv-feedback). |
 
 **Typical values** (for sanity-checking what ODIN learned):
 
@@ -848,6 +849,17 @@ area and glass quality. An over-estimated factor makes the solver idle
 through cold hours banking on free sun that never shows up.
 
 Derived values are shown in the **Debug JSON** rather than as editable fields: `used_heat_loss` (kW/K, learned by the day method — heat produced divided by the indoor/outdoor difference of the last heating day), `used_heating_cop` and the thermal-mass figures.
+
+### Production — Measured PV Feedback
+
+The **Production** sub-card (Monitoring → Physics Data → **Misc**) takes the AC energy counter of your own inverter and corrects the solar forecast with it. Saved with **Apply Overrides & DHW**.
+
+| Field | Accepted | Description |
+|-------|----------|-------------|
+| **Solar AC Energy** | 0–100 000 000 kWh, two decimals, `0` = off | Cumulative inverter AC production. Successive readings are differenced; a drop is a replaced meter: that hour is dropped and the counter rebased. |
+| **Inverter Max Capacity** | 0–500 kW, `0` = unknown | AC ceiling. Only used to recognise a clipped hour, which the plant-factor learner then skips. The sky correction does not need it. |
+| **Measured PV Feedback** | on / off, default off | Off: the counter is displayed and nothing is corrected. |
+
 
 ### Charts
 
@@ -1020,6 +1032,7 @@ ODIN automatically learns how your house behaves from real daily measurements:
 - **How much heat the structure stores** — derived from how slowly the house cools down when the heat pump is off (the daily room-temperature swing).
 - **How much free solar heat enters through windows** — derived from periods when the sun is shining and the heat pump is off.
 - **How fast your hot-water tank cools** — derived from tank drift between heating cycles, against the outdoor temperature.
+- **How much sun the roof really gives** — with **Measured PV Feedback** on: a fast sky correction (one closed hour, measured against published) and a slow plant factor (clear, unclipped hours). Both are 1.0 while no counter arrives ([Production](#production--measured-pv-feedback)).
 
 These values improve over the first week of operation and continue to self-correct as conditions change across seasons. Every learned value is visible (and editable) in the Physics Data card.
 
@@ -1243,6 +1256,10 @@ POST /dashboard/set
 | `battery_max_discharge_kw` | 0–100 kW | Cap on the discharge ODIN may recommend. |
 | `discharge_override_z1`, `discharge_override_z2` | on / off | Force buffer discharge into that zone. |
 | `consumption_override_kwh` | `0` (off) or 0–1 000 000 kWh | The external kWh meter that replaces the pump's own counter ([Physics Data](#physics-data-daily-averages)). |
+| `production_meter_kwh` | `0` (off) or 0–100 000 000 kWh | The inverter's cumulative AC counter; corrects the solar forecast while **Measured PV Feedback** is on ([Production](#production--measured-pv-feedback)). |
+| `pv_inverter_ac_limit_kw` | `0` (unknown) or 0–500 kW | The inverter's AC ceiling; without it the plant factor is not learned. |
+
+Push the counter every few minutes: a reading older than 20 minutes falls back to the forecast alone.
 
 A value outside its accepted band is refused and the field keeps what it had. `0` is the off value for the two room fields and for the meter. The gap between `0` and `5 °C` on a room field is refused on purpose: it is the difference between *override off* and *a room that is being heated*, so a frosty hallway or a sensor that just came back never clears your override by accident.
 
@@ -1293,6 +1310,7 @@ Use this checklist after first-time setup to confirm everything is configured co
 - [ ] **Weekly Schedule** has at least one day carrying blocks with sensible temperature targets
 - [ ] **DHW**: tank volume, sensor and threshold set; legionella mode chosen
 - [ ] Where the pump gives no usable kWh counter, an **external kWh meter** is set under Monitoring → Physics Data → Misc → **Consumption**, and the Consumption card names that meter as the one running the history
+- [ ] On a PV installation the inverter's AC counter reaches ODIN and **Measured PV Feedback** is on: the Production line shows a reading age, not `no fresh reading`
 - [ ] **Battery** and **Mixing Tank** are switched on only when that hardware is really there
 - [ ] Go to the **Data** tab and click **Fetch Latest Data** — verify prices and weather load correctly
 - [ ] Go to the **Monitoring** tab — after the next hour, the plan and chart show a successful solve
